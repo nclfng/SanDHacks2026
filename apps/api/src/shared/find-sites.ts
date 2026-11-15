@@ -25,8 +25,20 @@ interface Row {
   hours_confirmed_on_source: boolean; has_ac: boolean | null; has_filtration: boolean | null; capacity_est: number | null;
   phone: string | null; last_verified_at: string;
   access_level: string; verification: string; ac_source: string | null; has_fee: boolean | null; category: string | null;
-  source_url: string | null; evidence: string | null;
+  source_url: string | null; evidence: string | null; external_key: string | null;
 }
+
+// ---------------------------------------------------------------- North Pole test fixture (OFF unless asked for)
+// Everything is closed at night while we work on this, so a 24/7 fake site sits at Santa Claus House in North Pole, Alaska.
+// Off by default: rows whose external_key starts with 'test:' are dropped everywhere, so nobody in San Diego County can be
+// sent to it. Run with FIND_SITES_TEST_NORTH_POLE=1 and a caller who says "North Pole" is placed there and sees only it.
+// Seed or remove the row in Neon with ingest/north-pole-test.ts.
+const TEST_KEY_PREFIX = 'test:';
+const testMode = (): boolean => process.env.FIND_SITES_TEST_NORTH_POLE === '1';
+const isTestSite = (r: Row): boolean => r.external_key?.startsWith(TEST_KEY_PREFIX) === true;
+const NORTH_POLE_AK: Pt = { lat: 64.7511, lon: -147.3494 }; // the middle of North Pole, Alaska
+const NORTH_POLE_ASK = /\bnorth pole\b|\bsanta claus house\b/i;
+const nearNorthPole = (p: Pt): boolean => km(p, NORTH_POLE_AK) < 50;
 
 // ---------------------------------------------------------------- catalog (Neon first, seed as the safety net)
 
@@ -78,6 +90,7 @@ function normalize(r: Record<string, unknown>): Row {
     category: r.category == null ? null : String(r.category),
     source_url: r.source_url == null ? null : String(r.source_url),
     evidence: r.evidence == null ? null : String(r.evidence),
+    external_key: r.external_key == null ? null : String(r.external_key),
   };
 }
 
@@ -247,6 +260,7 @@ export async function resolveLocation(input: FindSitesInput): Promise<Resolved |
     return best;
   };
   const text = input.location ?? '';
+  if (testMode() && NORTH_POLE_ASK.test(text)) return { pt: NORTH_POLE_AK, zip: '99705', label: 'North Pole, Alaska (test)', precision: 'landmark' };
   if (typeof input.lat === 'number' && typeof input.lon === 'number') { const pt = { lat: input.lat, lon: input.lon }; return { pt, zip: nearestZip(pt), label: text, precision: 'address' }; }
 
   // 1. a street address or cross streets is the most precise thing a caller can say. Google first (handles both),
@@ -357,7 +371,8 @@ async function findSitesCore(input: FindSitesInput): Promise<FindSitesOutput> {
   const catalogReady = catalog(); // read the database while the caller's location is being resolved (voice tool budget is 10 s)
   const loc = await resolveLocation(input);
   if (!loc) return { sites: [], resolved_zip: null, fallback_message: "I couldn't tell where you are. Could you give me your zip code or the nearest cross streets?" };
-  if (!inCounty(loc.pt)) return { sites: [], resolved_zip: loc.zip, fallback_message: "I can only look up cooling spaces in San Diego County. For help anywhere else, call 2 1 1." };
+  const testZone = testMode() && nearNorthPole(loc.pt);
+  if (!testZone && !inCounty(loc.pt)) return { sites: [], resolved_zip: loc.zip, fallback_message: "I can only look up cooling spaces in San Diego County. For help anywhere else, call 2 1 1." };
 
   const now = input.now ? new Date(input.now) : new Date();
   const lt = localNow(now);
@@ -372,6 +387,7 @@ async function findSitesCore(input: FindSitesInput): Promise<FindSitesOutput> {
   const cands: { r: Row; miles: number; travel: number; st: Status; score: number; mode: 'car' | 'walk' | 'transit' }[] = [];
   const later: { r: Row; miles: number; st: Status }[] = [];
   for (const r of rows) {
+    if (isTestSite(r) !== testZone) continue;                                            // hard filter: test callers see only the test site, everyone else never sees it
     if (now.getTime() - Date.parse(r.last_verified_at) > MAX_AGE_H * 3600_000) continue; // stale: never present as open
     if (NOT_ALLOWED.has(r.access_level)) continue;                                       // students / members / residents / age-restricted
     if (r.has_fee === true) continue;                                                    // free public spaces only

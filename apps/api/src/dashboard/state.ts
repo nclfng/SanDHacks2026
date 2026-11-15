@@ -30,7 +30,7 @@ export function seedRaw(): Raw {
 export async function neonRaw(db: Queryable, now: Date): Promise<Raw> {
   const q = async (sql: string) => (await db.query(sql, [now])).rows;
   const [sites, readings, calls, alerts, subscribers, crowd] = await Promise.all([
-    db.query(`select id, name, kind, tier, confidence, address, zip, lat, lon, hours, capacity_est, last_verified_at from sites`).then((r) => r.rows),
+    db.query(`select id, name, kind, tier, confidence, address, zip, lat, lon, hours, capacity_est, last_verified_at from sites where external_key is null or external_key not like 'test:%'`).then((r) => r.rows),
     q(`select time, zip, temp_f, heat_index, aqi, source from readings
        where time between $1::timestamptz - interval '48 hours' and $1::timestamptz + interval '48 hours'`),
     q(`select id, direction, channel, zip, site_id, outcome, started_at from calls
