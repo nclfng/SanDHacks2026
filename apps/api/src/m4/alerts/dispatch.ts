@@ -85,7 +85,6 @@ async function whatsAppDelivery(
   subscriber: SubscriberContact,
   alert: AlertRow,
   site: SiteResult | null,
-  customMessage?: string,
 ): Promise<WhatsAppTemplate | null | 'skip'> {
   const last = await lastInboundAt(subscriber.phone_hash, 'whatsapp').catch(() => null);
   if (last && Date.now() - last.getTime() < WHATSAPP_WINDOW_HOURS * 3600_000) return null;
@@ -96,9 +95,7 @@ async function whatsAppDelivery(
     );
     return 'skip';
   }
-  const variables = whatsAppAlertVariables({ alert, site, language: subscriber.language });
-  if (customMessage) variables['1'] = testMessage(customMessage).replace(/\s+/g, ' ').trim(); // replaces the opening line
-  return { contentSid, variables };
+  return { contentSid, variables: whatsAppAlertVariables({ alert, site, language: subscriber.language }) };
 }
 
 // Messages every active subscriber in alert.zips their nearest open site, on the channel they joined on
@@ -106,11 +103,7 @@ async function whatsAppDelivery(
 // ALERT_TEXT_COOLDOWN_HOURS. One subscriber's failure never stops the others.
 // Messenger subscribers are reached only if they wrote in the last 24 hours (see messenger/send.ts); the rest are
 // skipped and logged.
-// A hand-written test message (dashboard "custom message" box). Replaces the whole alert text, still labelled a test.
-export const CUSTOM_MESSAGE_MAX = 300;
-const testMessage = (text: string): string => `Shade TEST: ${text}`;
-
-export async function dispatchAlert(alert: AlertRow, customMessage?: string): Promise<{ textsSent: number }> {
+export async function dispatchAlert(alert: AlertRow): Promise<{ textsSent: number }> {
   const subscribers = await listActiveSubscribersByZips(alert.zips);
   const since = new Date(Date.now() - ALERT_TEXT_COOLDOWN_HOURS * 3600_000);
   let textsSent = 0;
@@ -135,9 +128,7 @@ export async function dispatchAlert(alert: AlertRow, customMessage?: string): Pr
       return null;
     });
 
-    const body = customMessage
-      ? testMessage(customMessage)
-      : alertMessage({ alert, site, language: subscriber.language, style: messenger ? 'messenger' : 'plain' });
+    const body = alertMessage({ alert, site, language: subscriber.language, style: messenger ? 'messenger' : 'plain' });
     let result: SendSmsOutput;
     if (messenger) {
       // Writes the calls row with alert_id, which is the row both guards read.
@@ -153,7 +144,7 @@ export async function dispatchAlert(alert: AlertRow, customMessage?: string): Pr
       const channel = subscriber.alert_channel === 'whatsapp' ? 'whatsapp' : 'sms';
       let template: WhatsAppTemplate | undefined;
       if (channel === 'whatsapp') {
-        const delivery = await whatsAppDelivery(subscriber, alert, site, customMessage);
+        const delivery = await whatsAppDelivery(subscriber, alert, site);
         if (delivery === 'skip') continue;
         template = delivery ?? undefined;
       }
@@ -192,7 +183,7 @@ const MOCK_ALERT_TTL_HOURS = 3;
 // Demo path: inserts a kind = 'mock' alert with a null nws_id, then dispatches it.
 // It skips the re-crawl the real flow asks M2 for: the button should answer in seconds.
 // Throws on bad zips. Pressing it twice makes two alerts, and each texts everyone in the zips.
-export async function triggerMockAlert(args: { zips: string[]; headline?: string; message?: string }): Promise<AlertRow> {
+export async function triggerMockAlert(args: { zips: string[]; headline?: string }): Promise<AlertRow> {
   if (args.zips.length === 0 || !args.zips.every((zip) => /^\d{5}$/.test(zip))) {
     throw new Error('triggerMockAlert: zips must be a non-empty list of 5-digit zip codes');
   }
@@ -204,7 +195,7 @@ export async function triggerMockAlert(args: { zips: string[]; headline?: string
     onsetAt: new Date(),
     expiresAt: new Date(Date.now() + MOCK_ALERT_TTL_HOURS * 3600_000),
   });
-  const { textsSent } = await dispatchAlert(row, args.message?.trim() || undefined);
+  const { textsSent } = await dispatchAlert(row);
   // The inserted row still says 0.
   return { ...row, texts_sent: row.texts_sent + textsSent };
 }

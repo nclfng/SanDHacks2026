@@ -28,8 +28,6 @@ const twilioSmsParams = z.object({
 const mockAlertBody = z.object({
   zips: z.array(z.string().regex(/^\d{5}$/)).min(1),
   headline: z.string().min(1).optional(),
-  // Optional hand-written text sent instead of the standard alert (still prefixed "Shade TEST:").
-  message: z.string().max(300).optional(),
 });
 
 function escapeXml(text: string): string {

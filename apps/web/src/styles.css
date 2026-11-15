@@ -99,9 +99,6 @@ h1, h2, h3, p { margin: 0; }
 .nav:hover svg { transform: translateX(-3px); }
 .sendalert label { font-weight: 500; }
 .sendalert input { width: 72px; height: 36px; padding: 0 12px; font: inherit; color: var(--ink); text-align: center; letter-spacing: .04em; background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; }
-.sendalert .customtoggle { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; white-space: nowrap; }
-.sendalert .customtoggle input { width: auto; height: auto; padding: 0; }
-.sendalert input.custommsg { width: 240px; text-align: left; letter-spacing: normal; }
 .sendalert .ok { color: var(--blue); }
 .sendalert .err { color: #b4361f; }
 

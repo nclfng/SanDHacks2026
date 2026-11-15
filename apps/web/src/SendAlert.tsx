@@ -17,8 +17,6 @@ type Result = { ok: boolean; text: string } | null;
 
 export function SendAlert({ zip }: { zip: string | null }) {
   const [value, setValue] = useState(zip ?? '92105');
-  const [custom, setCustom] = useState(false);
-  const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result>(null);
 
@@ -35,10 +33,7 @@ export function SendAlert({ zip }: { zip: string | null }) {
 
   const send = async () => {
     if (!valid || busy) return;
-    const text = custom ? message.trim() : '';
-    if (!confirm(text
-      ? `Send "Shade TEST: ${text}" to everyone subscribed in ${value}? It messages them for real.`
-      : `Send a test heat alert to everyone subscribed in ${value}? It messages them for real.`)) return;
+    if (!confirm(`Send a test heat alert to everyone subscribed in ${value}? It messages them for real.`)) return;
     let secret = storedSecret();
     if (!secret) {
       secret = prompt('Alert secret (M4_ALERT_SECRET from the server .env)')?.trim() || null;
@@ -50,7 +45,7 @@ export function SendAlert({ zip }: { zip: string | null }) {
       const res = await fetch(`${API}/m4/alerts/mock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ zips: [value], headline: `Test alert from the dashboard for ${value}`, ...(text ? { message: text } : {}) }),
+        body: JSON.stringify({ zips: [value], headline: `Test alert from the dashboard for ${value}` }),
       });
       if (res.status === 401) {
         storeSecret(null);   // wrong or missing on the server: ask again next time
@@ -80,10 +75,7 @@ export function SendAlert({ zip }: { zip: string | null }) {
       <label htmlFor="alertzip">Test alert</label>
       <input id="alertzip" inputMode="numeric" pattern="\d{5}" maxLength={5} placeholder="Zip" autoComplete="off"
         value={value} onChange={(e) => setValue(e.target.value.replace(/\D/g, '').slice(0, 5))} />
-      <label className="customtoggle"><input type="checkbox" checked={custom} onChange={(e) => setCustom(e.target.checked)} /> Custom message</label>
-      {custom && <input className="custommsg" aria-label="Custom alert message" placeholder="Type your own alert text" maxLength={300} autoComplete="off"
-        value={message} onChange={(e) => setMessage(e.target.value)} />}
-      <button className="btn" type="submit" disabled={!valid || busy || (custom && !message.trim())}>{busy ? 'Sending…' : 'Send alert'}</button>
+      <button className="btn" type="submit" disabled={!valid || busy}>{busy ? 'Sending…' : 'Send alert'}</button>
       {result && <span className={result.ok ? 'ok' : 'err'} role="status">{result.text}</span>}
     </form>
   );
