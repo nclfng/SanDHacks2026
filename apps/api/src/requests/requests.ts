@@ -7,16 +7,25 @@ import { db } from '../shared/db';
 import { resolveLocation } from '../shared/find-sites';
 import { hashPhone } from '../shared/phone';
 import { eventsOf, logEvent } from './events';
-import { blastNeighbors } from './neighbors';
+import { blastNeighbors, spokenPhone, volunteerPhoneFor } from './neighbors';
 
 const FAILED =
   "I couldn't send your request. Please call 2 1 1. They can help, and they can arrange a free ride. If this is an emergency, call 9 1 1.";
 const SENT = "I've sent your request to neighbors nearby who signed up to help.";
 
-/** The only place a status becomes words. Only 'incoming' says help is coming, and nothing promises a time. */
-export function sayThis(status: RequestStatus, neighborsMessaged: number | null = null): string {
+/**
+ * The only place a status becomes words. Only 'incoming' says help is coming, and nothing promises a time. With the
+ * volunteer's phone, 'incoming' reads it out so the caller can reach them.
+ */
+export function sayThis(status: RequestStatus, neighborsMessaged: number | null = null, volunteerPhone: string | null = null): string {
   if (status === 'incoming') {
-    return 'A neighbor has said they can come help you. Please stay where you are and hold tight. If anyone feels worse, hang up and call 9 1 1.';
+    const reach = volunteerPhone
+      ? ` Their phone number is ${spokenPhone(volunteerPhone)}. Again, that's ${spokenPhone(volunteerPhone)}. They may call you when they're close.`
+      : '';
+    return `A neighbor has said they can come help you.${reach} Please stay where you are and hold tight. If anyone feels worse, hang up and call 9 1 1.`;
+  }
+  if (status === 'closed') {
+    return 'The volunteer marked your request as done. If you still need help, call 2 1 1. If this is an emergency, call 9 1 1.';
   }
   if (status === 'requesting' && neighborsMessaged === 0) {
     return "I couldn't reach any neighbors who signed up to help near you. Please call 2 1 1. They can arrange a free ride. If anyone feels worse, call 9 1 1.";
@@ -40,7 +49,8 @@ export async function handleCheckStatus({ conversation_id }: z.infer<typeof chec
   try {
     const { rows: [r] } = await db.query(`select id, status, neighbors_messaged from requests where conversation_id = $1`, [conversation_id]);
     if (!r) return { ok: false, say_this: 'I have no help request on file for this call.' };
-    return { ok: true, request_id: r.id, status: r.status, say_this: sayThis(r.status, r.neighbors_messaged) };
+    const phone = r.status === 'incoming' ? await volunteerPhoneFor(r.id) : null;
+    return { ok: true, request_id: r.id, status: r.status, say_this: sayThis(r.status, r.neighbors_messaged, phone) };
   } catch (err) {
     console.error('[requests] check status failed', err);
     return { ok: false, say_this: FAILED };
@@ -90,7 +100,8 @@ export async function handleRequestHelp(body: z.infer<typeof requestHelpBody>): 
       });
       return { ok: true, request_id: row.id, status: row.status, say_this: `${SENT} ${sayThis(row.status)}` };
     }
-    return { ok: true, request_id: row.id, status: row.status, say_this: sayThis(row.status, row.neighbors_messaged) };
+    const volunteerPhone = row.status === 'incoming' ? await volunteerPhoneFor(row.id) : null;
+    return { ok: true, request_id: row.id, status: row.status, say_this: sayThis(row.status, row.neighbors_messaged, volunteerPhone) };
   } catch (err) {
     console.error('[requests] request_help failed', err);
     return { ok: false, say_this: FAILED };

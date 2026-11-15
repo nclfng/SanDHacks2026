@@ -247,7 +247,7 @@ Everything is round or pill-shaped: 24px panels, full pills for bars, buttons, c
 - Needs chips: 60% white pills. "Told to call 911": solid aqi-unhealthy with dark text. AQI chips: ramp color with the number.
 
 ### Panels and rows
-- Panels have no padding of their own. Rows carry 13px by 22px and are separated by 13% blue hairlines. Selected and hovered rows get a 40% white wash.
+- Panels have no padding of their own. Rows carry 13px by 22px and are separated by 13% blue hairlines. Hovered rows get a 40% white wash. The row whose detail card is open gets a 9% Deep Water wash and a Deep Water title.
 
 ### Map tokens
 - Cool zone: 34px Zone Blue disc with a white six-arm asterisk. Discovered sites: white disc with a Zone Blue ring. Closed: blue-grey.

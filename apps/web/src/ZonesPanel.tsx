@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { get, type SiteDetail, type Zone } from './api';
+import { Card } from './Card';
 import { DAY, KIND, hoursSpan, href, to12h, todayIndex } from './format';
 
 const Tag = ({ z }: { z: Zone }) => z.tier === 'official' ? <span className="ztag cz">Cool Zone</span> : <span className="ztag ps">Public Space</span>;
@@ -15,37 +16,36 @@ export function ZonesPanel({ sites, summary, summaryTitle, zone, onZone, onClear
   const rows = sites.filter((x) => x.name.toLowerCase().includes(needle))
     .sort((a, b) => official(b) - official(a) || b.referrals_24h - a.referrals_24h || a.name.localeCompare(b.name));
 
-  return (
+  return <>
     <section className="glass panel" id="zones" aria-labelledby="zh">
       <div className="head">
         <h2 id="zh">Cool zones</h2>
         <p title={summaryTitle}>{summary}</p>
-        {/* typing while a zone is open returns to the list */}
         <input type="search" placeholder="Search by name" aria-label="Search cool zones by name" autoComplete="off"
-          value={q} onChange={(e) => { setQ(e.target.value); onClear(); }} />
+          value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {z ? <ZoneDetail key={z.id} z={z} onBack={onClear} /> : (
-        <div className="scroll" id="zlist">
-          {rows.length ? rows.map((x) => (
-            <button key={x.id} className={`zrow ${zone === x.id ? 'sel' : ''}`} title={`${x.address}. Today: ${x.hours_today}`} onClick={() => onZone(x.id)}>
-              <span><h3>{x.name}</h3><span className="sub"><Tag z={x} />{KIND[x.kind]}</span></span>
-              <span className="closes">{x.closes_at ? <>{to12h(x.closes_at)}<small>closes</small></> : <>24 hours<small>open</small></>}</span>
-            </button>
-          )) : <p className="none">{needle ? 'No open cool zone matches that name.' : 'No cool zones are open right now.'}</p>}
-        </div>
-      )}
+      <div className="scroll" id="zlist">
+        {rows.length ? rows.map((x) => (
+          <button key={x.id} className={`zrow ${zone === x.id ? 'sel' : ''}`} aria-pressed={zone === x.id} title={`${x.address}. Today: ${x.hours_today}`} onClick={() => onZone(x.id)}>
+            <span><h3>{x.name}</h3><span className="sub"><Tag z={x} />{KIND[x.kind]}</span></span>
+            <span className="closes">{x.closes_at ? <>{to12h(x.closes_at)}<small>closes</small></> : <>24 hours<small>open</small></>}</span>
+          </button>
+        )) : <p className="none">{needle ? 'No open cool zone matches that name.' : 'No cool zones are open right now.'}</p>}
+      </div>
       <div className="legend rule">
         <p><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>Caller markers on the map</p>
-        <i className="tk req"></i><span>Requesting: waiting for a neighbor to say yes</span>
-        <i className="tk req incoming"></i><span>Incoming: a neighbor said yes</span>
-        <i className="dot"></i><span>Called or texted in the last 24h</span>
+        <i className="tk req"></i><span>Locating help: waiting for a neighbor to say yes</span>
+        <i className="tk req incoming"></i><span>Help incoming: a neighbor said yes</span>
+        <i className="dot"></i><span>People who called or texted in from this zip, last 24h</span>
       </div>
     </section>
-  );
+    {/* The selected zone opens in a second panel beside the list; switching zones swaps its content in place. */}
+    <Card id="zcard" item={z} label={(x) => x.name} onClose={onClear}>{(x) => <ZoneDetail key={x.id} z={x} />}</Card>
+  </>;
 }
 
-/** The selected zone replaces the list. GET /dashboard/sites/:id adds what the snapshot leaves out, and Google Places. */
-function ZoneDetail({ z, onBack }: { z: Zone; onBack(): void }) {
+/** GET /dashboard/sites/:id adds what the snapshot leaves out, and Google Places. */
+function ZoneDetail({ z }: { z: Zone }) {
   const [d, setD] = useState<SiteDetail | 'failed' | null>(null);
   useEffect(() => {
     let live = true;
@@ -61,24 +61,22 @@ function ZoneDetail({ z, onBack }: { z: Zone; onBack(): void }) {
   const row = (k: string, v: ReactNode) => v ? <><dt>{k}</dt><dd>{v}</dd></> : null;
 
   return (
-    <div className="scroll" id="zdetail">
-      <button className="back" onClick={onBack}>&larr; All cool zones</button>
-      {href(g?.photo) && <img src={href(g?.photo)} alt="" />}
+    <div className="scroll detail">
+      {href(g?.photo) && <img src={href(g?.photo)} alt="" onLoad={(e) => e.currentTarget.classList.add('loaded')} />}
       <h3>{z.name}</h3>
       <span className="sub"><Tag z={z} />{det?.category || KIND[z.kind]}{g?.rating ? ` · ★ ${g.rating} (${g.ratings} on Google)` : ''}</span>
       <p className="status">{z.closes_at ? `Open until ${to12h(z.closes_at)}` : 'Open 24 hours'}</p>
       {note && <p className="dim">{note}</p>}
       {g?.summary && <p className="dim" style={{ marginTop: 8 }}>{g.summary}</p>}
-      <h4>Details</h4>
-      <dl>
+      <dl style={{ marginTop: 14 }}>
         {row('Address', z.address)}
         {row('Phone', det?.phone && <a href={`tel:${tel}`}>{det.phone}</a>)}
         {row('Access', det?.access_notes)}
         {row('Pets', det?.pet_policy)}
       </dl>
       {det ? <>
-        <h4>Hours</h4>
-        <dl>{[1, 2, 3, 4, 5, 6, 0].map((n) => {
+        <h4 className="late">Hours</h4>
+        <dl className="late">{[1, 2, 3, 4, 5, 6, 0].map((n) => {
           const v = det.hours.weekly.filter((i) => i.day === n).map(hoursSpan).join(', ') || 'Closed';
           const cls = n === today ? 'today' : undefined;
           return <Fragment key={n}><dt className={cls}>{DAY[n]}</dt><dd className={cls}>{v}</dd></Fragment>;

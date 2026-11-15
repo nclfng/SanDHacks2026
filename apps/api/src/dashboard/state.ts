@@ -7,7 +7,7 @@ import readingsSeed from '../../../../data/seed/readings.json';
 import zipGap from '../../../../data/seed/zip_gap.json';
 import { hoursToday } from '../shared/hours';
 
-interface CallRow { id: number; direction: CallDirection; channel: Channel; zip: string | null; site_id: number | null; outcome: CallOutcome | null; started_at: string | Date }
+interface CallRow { id: number; direction: CallDirection; channel: Channel; phone_hash: string | null; zip: string | null; site_id: number | null; outcome: CallOutcome | null; started_at: string | Date }
 interface AlertRow { id: number; kind: AlertKind; zips: string[]; headline: string | null; onset_at: string | Date | null; expires_at: string | Date | null; texts_sent: number }
 // How packed the venue itself is, from Google review mentions (site_review_signals). Unrelated to how many people Shade sent.
 interface CrowdRow { site_id: number; scanned: number; crowded: number; spacious: number }
@@ -33,7 +33,7 @@ export async function neonRaw(db: Queryable, now: Date): Promise<Raw> {
     db.query(`select id, name, kind, tier, confidence, verification, address, zip, lat, lon, hours, capacity_est, last_verified_at from sites where external_key is null or external_key not like 'test:%'`).then((r) => r.rows),
     q(`select time, zip, temp_f, heat_index, aqi, source from readings
        where time between $1::timestamptz - interval '48 hours' and $1::timestamptz + interval '48 hours'`),
-    q(`select id, direction, channel, zip, site_id, outcome, started_at from calls
+    q(`select id, direction, channel, phone_hash, zip, site_id, outcome, started_at from calls
        where started_at > $1::timestamptz - interval '24 hours' and started_at <= $1 order by started_at desc`),
     q(`select id, kind, zips, headline, onset_at, expires_at, texts_sent from alerts
        where detected_at <= $1 and (expires_at is null or expires_at > $1) order by detected_at desc`),
@@ -58,6 +58,21 @@ export function buildState(raw: Raw, now: Date, source: Source) {
   const referrals = new Map<number, number>();
   for (const c of raw.calls) if (c.site_id) referrals.set(c.site_id, (referrals.get(c.site_id) ?? 0) + 1);
 
+  // People who called or texted in, per zip. Calls are stored by zip only, so the map gets one count at the zip's
+  // centroid rather than a made-up spot per call. Outbound rows are Shade's own replies and alerts. A text chat logs a
+  // row per message, so each person (phone_hash, or the row when it has none) counts once, in one zip: where a
+  // find_sites lookup last placed them, else their latest row's. A follow-up "thanks" row carries the zip on file.
+  const located = (c: CallRow) => c.outcome === 'site_given' || c.outcome === 'no_site_found';
+  const better = (c: CallRow, cur: CallRow) =>
+    located(c) !== located(cur) ? located(c) : new Date(c.started_at) > new Date(cur.started_at);
+  const person = new Map<string | number, CallRow>();
+  for (const c of raw.calls) if (c.direction === 'inbound' && c.zip && CENTROID.has(c.zip)) {
+    const who = c.phone_hash ?? c.id, cur = person.get(who);
+    if (!cur || better(c, cur)) person.set(who, c);
+  }
+  const callers = new Map<string, number>();
+  for (const { zip } of person.values()) callers.set(zip!, (callers.get(zip!) ?? 0) + 1);
+
   const crowd = new Map(raw.crowd.map(({ site_id, ...c }) => [site_id, c]));
 
   // Per zip, the reading nearest to now (the seed holds forecasts, so "latest" can be in the future).
@@ -81,12 +96,7 @@ export function buildState(raw: Raw, now: Date, source: Source) {
       ...hoursToday(s.hours, now, s.tier === 'discovered' && s.verification !== 'confirmed'),
     })).filter((s) => s.open_now),
     readings: [...nearest.values()].map((r) => ({ ...r, area: area.get(r.zip) ?? r.zip })),
-    calls: raw.calls.flatMap((c) => {
-      const at = c.zip ? CENTROID.get(c.zip) : undefined;
-      if (!at) return [];
-      // Calls are stored by zip only; spread same-zip calls around the centroid so they don't stack.
-      return [{ ...c, lat: at[0] + 0.006 * Math.cos(c.id * 2.4), lon: at[1] + 0.006 * Math.sin(c.id * 2.4) }];
-    }),
+    calls: [...callers].map(([zip, n]) => { const [lat, lon] = CENTROID.get(zip)!; return { zip, n, lat, lon }; }), // no phone_hash out
     alerts: raw.alerts.map((a) => ({ ...a, mock: a.kind === 'mock' })),
     subscribers: raw.subscribers,
   };

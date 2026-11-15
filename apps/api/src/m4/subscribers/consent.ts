@@ -112,6 +112,8 @@ export async function subscribeMessenger(args: {
     linkedPhoneHash: args.phoneE164 ? hashPhone(args.phoneE164) : null,
     displayName: args.name ?? null,
     volunteer: args.volunteer,
+    // Only a volunteer's number is stored readable: callers they help are given it.
+    volunteerPhoneE164: args.volunteer ? args.phoneE164 ?? null : null,
   });
 }
 

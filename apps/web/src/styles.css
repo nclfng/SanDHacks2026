@@ -11,6 +11,10 @@
   --forest: #0b2540;
   --r: 24px;
   --ease: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.5, 0, .75, 0);   /* exits */
+  /* motion: distances go to 0 under reduced motion (bottom of file); fades and color changes stay */
+  --t-press: 90ms; --t-state: 200ms; --t-move: 360ms;
+  --rise: 10px; --shift: 14px; --blur: 8px;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -39,6 +43,7 @@ h1, h2, h3, p { margin: 0; }
 .leaflet-control-attribution { background: rgba(255, 255, 255, .7) !important; color: var(--ink-2); font-size: 10px; border-radius: 8px 0 0 0; }
 .leaflet-control-attribution a { color: var(--blue); }
 .leaflet-bottom.leaflet-right { right: 396px; bottom: 12px; }
+body:has(#rcard:not(.leaving)) .leaflet-bottom.leaflet-right { right: 748px; }   /* zoom buttons step clear of an open request card */
 .leaflet-bar { border: 0 !important; box-shadow: 0 8px 18px -8px rgba(11, 60, 110, .35) !important; border-radius: 14px !important; overflow: hidden; }
 .leaflet-bar a { background: rgba(255, 255, 255, .85) !important; color: var(--blue) !important; border-color: rgba(11, 60, 110, .15) !important; width: 36px !important; height: 36px !important; line-height: 36px !important; }
 .leaflet-bar a:hover { background: #fff !important; }
@@ -56,7 +61,8 @@ h1, h2, h3, p { margin: 0; }
 .req.requesting::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--heat); animation: ping 1.8s var(--ease) infinite; }
 @keyframes ping { from { transform: scale(1); opacity: .9; } to { transform: scale(2.6); opacity: 0; } }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--forest); box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); opacity: .7; }
-@media (prefers-reduced-motion: reduce) { .req.requesting::after { animation: none; } * { transition: none !important; } }
+/* Count of callers in one zip. Grows sideways past 99; the icon anchor stays at 18px, so 3 digits sit ~3px off center. */
+.dot.n { width: auto; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; opacity: .85; color: #fff; font: 600 11px/18px 'Hanken Grotesk', sans-serif; text-align: center; }
 
 /* ---------- glass ---------- */
 .glass {   /* liquid glass: clear, bright-edged, bends the map beneath it */
@@ -87,9 +93,9 @@ h1, h2, h3, p { margin: 0; }
 .alert i { width: 8px; height: 8px; border-radius: 50%; background: var(--heat); }
 .alert b { font-weight: 500; }
 .alert span { color: var(--ink-2); }
-.btn { height: 36px; padding: 0 16px; border-radius: 18px; background: var(--blue); color: #fff; font-weight: 500; transition: background .2s, transform .2s var(--ease); }
+.btn { height: 36px; padding: 0 16px; border-radius: 18px; background: var(--blue); color: #fff; font-weight: 500; transition: background var(--t-state), color var(--t-state), transform var(--t-state) var(--ease); }
 .btn:hover { background: #075985; }
-.btn:active { transform: scale(.97); }
+.btn:active:not(:disabled) { transform: scale(.97); transition-duration: var(--t-press); }
 .btn:disabled { background: rgba(11, 60, 110, .12); color: var(--ink-2); cursor: default; }
 /* Test alert by zip (SendAlert.tsx): pushed to the right end of the top bar. */
 .sendalert { margin-left: auto; padding-right: 8px; gap: 10px; }
@@ -98,17 +104,19 @@ h1, h2, h3, p { margin: 0; }
 .nav svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s var(--ease); }
 .nav:hover svg { transform: translateX(-3px); }
 .sendalert label { font-weight: 500; }
-.sendalert input { width: 72px; height: 36px; padding: 0 12px; font: inherit; color: var(--ink); text-align: center; letter-spacing: .04em; background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; }
+.sendalert input { width: 72px; height: 36px; padding: 0 12px; font: inherit; color: var(--ink); text-align: center; letter-spacing: .04em; background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; transition: background var(--t-state), border-color var(--t-state); }
 .sendalert .ok { color: var(--blue); }
 .sendalert .err { color: #b4361f; }
 
 .panel { position: fixed; z-index: 500; top: 84px; bottom: 16px; display: flex; flex-direction: column; overflow: hidden; }
 #zones { left: 16px; width: 340px; }
+#zcard { left: 368px; width: 340px; z-index: 499; }   /* tucked under #zones so it slides out from behind it */
+#rcard { right: 396px; width: 340px; z-index: 499; }   /* same, under #side */
 #side { right: 16px; width: 368px; }
 .head { padding: 20px 22px 14px; }
 .head h2 { font-size: 20px; font-weight: 300; letter-spacing: -.01em; }
 .head p { color: var(--ink-2); margin-top: 2px; }
-.head input { display: block; width: 100%; height: 38px; margin-top: 12px; padding: 0 14px; font: inherit; color: var(--ink); background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; }
+.head input { display: block; width: 100%; height: 38px; margin-top: 12px; padding: 0 14px; font: inherit; color: var(--ink); background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; transition: background var(--t-state), border-color var(--t-state); }
 .head input::placeholder { color: var(--ink-2); }
 .head input:focus-visible { border-radius: 999px; }
 #zlist .none { padding: 13px 22px; color: var(--ink-2); border-top: 1px solid var(--line); }
@@ -117,7 +125,10 @@ h1, h2, h3, p { margin: 0; }
 
 /* zone rows */
 .zrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; width: 100%; padding: 13px 22px; border-top: 1px solid var(--line); transition: background .2s; }
-.zrow:hover, .zrow.sel { background: rgba(255, 255, 255, .4); }
+.zrow:hover { background: rgba(255, 255, 255, .4); }
+/* the row whose card is open: a blue wash and a blue title */
+.zrow.sel, .req-row.sel { background: rgba(3, 105, 161, .09); }
+.zrow.sel h3, .req-row.sel h3 { color: var(--blue); }
 .zrow h3 { font-size: 14.5px; font-weight: 500; }
 .zrow .sub { color: var(--ink-2); font-size: 13px; }
 .zrow .closes { text-align: right; white-space: nowrap; }
@@ -133,21 +144,26 @@ h1, h2, h3, p { margin: 0; }
 .legend .dot { justify-self: center; }
 
 /* zone detail */
-#zdetail { padding: 0 22px 18px; }
-#zdetail .back { color: var(--blue); font-weight: 500; padding: 4px 0 12px; }
-#zdetail img { display: block; width: 100%; height: 150px; object-fit: cover; border-radius: 16px; margin-bottom: 14px; }
-#zdetail h3 { font-size: 19px; font-weight: 500; letter-spacing: -.01em; line-height: 1.25; margin-bottom: 6px; }
-#zdetail .sub, #zdetail .dim { color: var(--ink-2); font-size: 13px; }
-#zdetail .status { margin: 12px 0 2px; font-size: 15px; font-weight: 500; }
-#zdetail h4 { margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); font: 500 11px/1 "Red Hat Mono", ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
-#zdetail dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13.5px; }
-#zdetail dt { color: var(--ink-2); }
-#zdetail dd { margin: 0; overflow-wrap: anywhere; }
-#zdetail dl .today { font-weight: 600; color: var(--ink); }
-#zdetail a { color: var(--blue); }
-#zdetail .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-#zdetail .links a { display: inline-flex; align-items: center; text-decoration: none; color: #fff; }
-#zdetail .links a.ghost { background: rgba(255, 255, 255, .6); color: var(--blue); }
+.detail { padding: 14px 22px 18px; }
+.card .close { position: absolute; z-index: 1; top: 20px; right: 20px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--ink); background: rgba(255, 255, 255, .75); box-shadow: 0 2px 6px -2px rgba(11, 60, 110, .3); transition: background var(--t-state); }
+.card .close:hover { background: #fff; }
+.card .close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.detail img { display: block; width: 100%; height: 150px; object-fit: cover; border-radius: 16px; margin-bottom: 14px; }
+.detail > h3:first-child { margin-right: 40px; }   /* no photo: keep the name clear of the close button */
+.detail h3 { font-size: 19px; font-weight: 500; letter-spacing: -.01em; line-height: 1.25; margin-bottom: 6px; }
+.detail .sub, .detail .dim { color: var(--ink-2); font-size: 13px; }
+.detail .status { margin: 12px 0 2px; font-size: 15px; font-weight: 500; }
+.detail .said { margin-top: 14px; }
+.detail .log { margin-top: 18px; }
+.detail h4 { margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); font: 500 11px/1 "Red Hat Mono", ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13.5px; }
+.detail dt { color: var(--ink-2); }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.detail dl .today { font-weight: 600; color: var(--ink); }
+.detail a { color: var(--blue); }
+.detail .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.detail .links a { display: inline-flex; align-items: center; text-decoration: none; color: #fff; }
+.detail .links a.ghost { background: rgba(255, 255, 255, .6); color: var(--blue); }
 
 /* readings */
 .now { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 22px 4px; }
@@ -169,17 +185,15 @@ h1, h2, h3, p { margin: 0; }
 
 /* requests */
 .req-row { border-top: 1px solid var(--line); padding: 14px 22px; transition: background .2s; }
-.req-row.sel { background: rgba(255, 255, 255, .4); }
+button.req-row { display: block; width: 100%; }
+.req-row .meta + .agent { margin-top: 9px; }
 .req-row.new { animation: arrive 1.2s var(--ease); }
 @keyframes arrive { from { background: rgba(244, 167, 101, .4); } }
-.req-row .open { display: block; width: 100%; }
 .req-row h3 { font-size: 14.5px; font-weight: 500; }
 .req-row .meta { color: var(--ink-2); font-size: 13px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0 11px; }
 .chip { padding: 2px 10px; border-radius: 999px; background: rgba(255, 255, 255, .6); font-size: 13px; }
 .said { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .55); font-size: 13.5px; }
-.more { display: none; }
-.req-row.sel .more { display: block; }
 .req-row.call h3 { font-weight: 400; color: var(--ink-2); }
 .req-row.call .agent { margin-top: 9px; }
 /* the latest step of a call, in quiet text; click it to read the whole trail */
@@ -196,8 +210,7 @@ h1, h2, h3, p { margin: 0; }
 .log li::before { content: ""; position: absolute; left: -20.5px; top: 11px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 2px #fff; }
 .log li:last-child { color: var(--ink); font-weight: 500; }
 .log small { display: block; color: var(--ink-2); font: 400 11.5px "Red Hat Mono", ui-monospace, monospace; letter-spacing: .02em; }
-.req-row .more { margin-top: 12px; }
-.st { flex: none; padding: 1px 9px; border-radius: 999px; font: 500 11px/18px "Red Hat Mono", ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; }
+.st { flex: none; transition: background var(--t-move), color var(--t-move), box-shadow var(--t-move); padding: 1px 9px; border-radius: 999px; font: 500 11px/18px "Red Hat Mono", ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; }
 .st.requesting { background: var(--heat); color: var(--heat-ink); }
 .st.incoming { background: var(--cool); color: #0c2a33; }
 .st.oncall { background: #fff; color: var(--blue); box-shadow: inset 0 0 0 1.5px var(--blue); }
@@ -212,4 +225,79 @@ h1, h2, h3, p { margin: 0; }
   .scroll { overflow: visible; }
   .leaflet-bottom.leaflet-right { right: 0; }
   body { background: #d6eaf8; }
+}
+
+/* ---------- request popup on the map ---------- */
+.leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 12px 24px -10px rgba(11, 50, 100, .45); }
+.leaflet-popup-content { margin: 10px 14px; }
+.req-pop { display: flex; align-items: center; gap: 8px; max-width: 260px; color: var(--ink); font-size: 13.5px; }
+.req-pop .need { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- motion ----------
+   Focal moment: the glass condenses out of the water on load. Everything else explains a state change:
+   list and detail swap sides, a picked card opens, a new caller lands on the map. Exits are instant or faster. */
+@keyframes surface { from { opacity: 0; transform: translateY(var(--rise)) scale(.985); filter: blur(var(--blur)); } }
+@keyframes rise { from { opacity: 0; transform: translateY(calc(var(--rise) * .6)); } }
+@keyframes from-right { from { opacity: 0; transform: translateX(var(--shift)); } }
+@keyframes from-left { from { opacity: 0; transform: translateX(calc(var(--shift) * -1)); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes to-left { to { opacity: 0; transform: translateX(calc(var(--shift) * -1)); } }
+@keyframes to-right { to { opacity: 0; transform: translateX(var(--shift)); } }
+.top > *, .panel { animation: surface .6s var(--ease) backwards; }
+.top .alert { animation-delay: 60ms; }
+.top .sendalert { animation-delay: 120ms; }
+#zones { animation-delay: 80ms; }
+#side { animation-delay: 160ms; }
+
+/* the zone list fills in as a list (first ten rows staggered, 225ms at most); a picked zone's card slides out from
+   behind the list, and picking another zone while it is open only fades its content */
+.zrow { animation: rise .4s var(--ease) backwards; }
+.zrow:nth-child(2) { animation-delay: 25ms; } .zrow:nth-child(3) { animation-delay: 50ms; } .zrow:nth-child(4) { animation-delay: 75ms; }
+.zrow:nth-child(5) { animation-delay: 100ms; } .zrow:nth-child(6) { animation-delay: 125ms; } .zrow:nth-child(7) { animation-delay: 150ms; }
+.zrow:nth-child(8) { animation-delay: 175ms; } .zrow:nth-child(9) { animation-delay: 200ms; } .zrow:nth-child(10) { animation-delay: 225ms; }
+.zrow:active, .rrow:active { background: rgba(255, 255, 255, .6); transition-duration: var(--t-press); }
+#zcard { animation: from-left var(--t-move) var(--ease) backwards; }
+/* closing a card tucks it back behind its list, quicker than it came out */
+#zcard.leaving { animation: to-left var(--t-state) var(--ease-in) forwards; }
+.detail { animation: fade var(--t-state) var(--ease) backwards; }
+.detail img { opacity: 0; filter: saturate(.3) blur(6px); transition: opacity .5s var(--ease), filter .7s var(--ease); }
+.detail img.loaded { opacity: 1; filter: none; }
+.detail .late { animation: fade var(--t-move) var(--ease) backwards; }
+.head input:hover, .sendalert input:hover { background: rgba(255, 255, 255, .75); }
+.head input:focus, .sendalert input:focus { background: #fff; border-color: rgba(3, 105, 161, .45); }
+.sendalert [role=status] { animation: from-right var(--t-state) var(--ease) backwards; }
+
+/* help requests: a card arrives from above with an orange wash; a picked request's card slides out from behind the list */
+#rcard { animation: from-right var(--t-move) var(--ease) backwards; }
+#rcard.leaving { animation: to-right var(--t-state) var(--ease-in) forwards; }
+.req-row { animation: rise .4s var(--ease) backwards; scroll-margin: 12px 0 72px; }
+.req-row.new { animation: arrive 1.4s var(--ease) backwards; }
+@keyframes arrive {
+  0% { opacity: 0; transform: translateY(calc(var(--rise) * -1)); background: rgba(244, 167, 101, .45); }
+  25% { opacity: 1; transform: none; background: rgba(244, 167, 101, .45); }
+}
+.log { animation: fade var(--t-state) var(--ease) backwards; }
+.log li { animation: rise .32s var(--ease) backwards; animation-delay: calc(min(var(--i, 0), 8) * 35ms); }
+
+/* readings: a picked zip's numbers settle in */
+.now > div { animation: rise var(--t-move) var(--ease) backwards; }
+.now > div + div { animation-delay: 50ms; }
+
+/* map: a hovered zone answers, a picked request pops, a caller who just asked lands, the popup rises off its marker,
+   and markers fade back after a zoom instead of blinking in (they hide during it, see MapView.tsx) */
+@media (hover: hover) and (pointer: fine) {
+  .leaflet-marker-icon:hover > .zone:not(.sel), .leaflet-marker-icon:hover > .req:not(.sel) { transform: scale(1.15); }
+}
+.req.sel { animation: pop .45s var(--ease); }
+.req.new { animation: land .7s var(--ease); }
+@keyframes land { from { opacity: 0; transform: scale(.3) translateY(calc(var(--rise) * -2)); } }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip-container { animation: rise var(--t-state) var(--ease); }
+.leaflet-marker-pane { transition: opacity .22s var(--ease); }
+.leaflet-zoom-anim .leaflet-marker-pane { opacity: 0; transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --rise: 0px; --shift: 0px; --blur: 0px; }
+  .req.requesting::after, .zone.sel, .req.sel, .req.new { animation: none; }
+  .leaflet-marker-icon:hover > .zone, .leaflet-marker-icon:hover > .req { transform: none; }
+  .detail img { filter: none; }
 }

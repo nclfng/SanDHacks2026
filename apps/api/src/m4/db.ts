@@ -182,6 +182,9 @@ export interface UpsertMessengerSubscriberInput {
   displayName?: string | null; // the name given with JOIN; null/undefined keeps the old one
   // JOIN ... VOLUNTEER sets subscribers.volunteer_at, a JOIN without it clears it, undefined (START) keeps it.
   volunteer?: boolean;
+  // A volunteer's own number, stored readable in phone_e164 so a caller they help can reach them. Only kept while
+  // they volunteer: a JOIN without VOLUNTEER clears it, STOP clears it, undefined (START) keeps it.
+  volunteerPhoneE164?: string | null;
 }
 
 // A Messenger opt-in, keyed on the Messenger hash: stores the ids alerts need and sets alert_channel 'messenger'.
@@ -198,7 +201,7 @@ export async function upsertMessengerSubscriber(input: UpsertMessengerSubscriber
   const rows = await query<SubscriberRow>(
     `insert into subscribers (phone_hash, phone_e164, zip, language, needs, consent_at, opted_out_at, alert_channel,
                               messenger_psid, messenger_page_id, linked_phone_hash, display_name, volunteer_at)
-     values ($1, null, $2, $3, $4::jsonb, $5::timestamptz, null, 'messenger', $6, $7, $8, $9,
+     values ($1, case when $10::boolean then $11 end, $2, $3, $4::jsonb, $5::timestamptz, null, 'messenger', $6, $7, $8, $9,
              case when $10::boolean then now() end)
      on conflict (phone_hash) do update set
        zip = excluded.zip, language = excluded.language, needs = excluded.needs, consent_at = excluded.consent_at,
@@ -207,7 +210,9 @@ export async function upsertMessengerSubscriber(input: UpsertMessengerSubscriber
        linked_phone_hash = coalesce(excluded.linked_phone_hash, subscribers.linked_phone_hash),
        display_name = coalesce(excluded.display_name, subscribers.display_name),
        volunteer_at = case when $10::boolean is null then subscribers.volunteer_at
-                           when $10::boolean then coalesce(subscribers.volunteer_at, now()) end
+                           when $10::boolean then coalesce(subscribers.volunteer_at, now()) end,
+       phone_e164 = case when $10::boolean is null then subscribers.phone_e164
+                         when $10::boolean then coalesce($11, subscribers.phone_e164) end
      returning ${SUBSCRIBER_COLUMNS}`,
     [
       input.phoneHash,
@@ -220,6 +225,7 @@ export async function upsertMessengerSubscriber(input: UpsertMessengerSubscriber
       input.linkedPhoneHash ?? null,
       input.displayName ?? null,
       input.volunteer ?? null,
+      input.volunteerPhoneE164 ?? null,
     ],
   );
   return rows[0];

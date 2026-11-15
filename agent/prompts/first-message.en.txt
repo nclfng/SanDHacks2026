@@ -1,1 +1,1 @@
-Hi, this is Shade, an automated AI assistant. I can help you find a nearby place to cool off or get clean air. If this is a medical emergency, hang up and call 9 1 1. Where are you right now? Your street address or the nearest cross streets work best.
+Hi, this is Shade, an AI voice agent that helps you find a nearby place to cool off or get clean air. If this is a medical emergency, hang up and call 9 1 1. What do you need help with?

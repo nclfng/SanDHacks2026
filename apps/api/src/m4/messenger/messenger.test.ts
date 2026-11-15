@@ -701,7 +701,7 @@ describe('mode 3: alerts from readings', () => {
     assert.equal(insert.params[0], 'high_heat_index');
     assert.equal(insert.params[1], null); // not an NWS alert
     assert.deepEqual(JSON.parse(String(insert.params[2])), ['92105']);
-    assert.match(twilioSends()[0].form!.get('Body')!, /^⚠️ Heads up from Shade: It is dangerously hot in your area right now \(heat index 106°F\)\.\n\nHere's the nearest cooling center that's open right now:\n📍 .*\n🗺️ Map: .*\n\n💧 Stay cool/s);
+    assert.match(twilioSends()[0].form!.get('Body')!, /^⚠️ Heads up from Shade: It is dangerously hot in your area right now \(heat index 106°F\)\.\n\nHere's the nearest (cooling center that's open right now|open place to cool off \(not an official cooling center, so call ahead first\)):\n📍 .*\n🗺️ Map: .*\n\n💧 Stay cool/s);
   });
 
   it('raises nothing when an alert of that kind went out recently, or readings are under the line', async () => {

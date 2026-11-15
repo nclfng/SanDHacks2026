@@ -52,7 +52,7 @@ export function App() {
     </header>
     <ZonesPanel sites={sites} zone={zone} onZone={pickZone} onClear={() => setZone(null)}
       summary={st.error ? `Can't reach the Shade API at ${API}` : d?.source === 'seed' ? 'Seed data, not live' : ''} summaryTitle={st.error ?? undefined} />
-    <SidePanel requests={requests} calls={inbox.data?.calls ?? []} reqError={inbox.error} req={req} fresh={fresh} onReq={pickReq}
+    <SidePanel requests={requests} calls={inbox.data?.calls ?? []} reqError={inbox.error} req={req} fresh={fresh} onReq={pickReq} onClose={() => setReq(null)}
       readings={readings} generatedAt={d?.generated_at ?? null} zip={zip} onZip={setZip} />
   </>;
 }

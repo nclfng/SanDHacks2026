@@ -12,6 +12,7 @@ export interface TextReply {
   text: string;
   outcome: CallOutcome | null; // null when the turn neither gave a site nor escalated, e.g. a clarifying question
   siteId: number | null;
+  zip: string | null; // where find_sites placed the person this turn (resolved_zip); null when it did not run
   language: Language;
 }
 
@@ -88,10 +89,11 @@ function isLanguage(value: unknown): value is Language {
 
 type ToolChunk = { payload: { toolName: string; args?: Record<string, unknown>; result?: unknown; isError?: boolean } };
 
-// outcome and siteId from the last find_sites result in the turn, and the language the model asked it for.
+// outcome, siteId and zip from the last find_sites result in the turn, and the language the model asked it for.
 function readToolUse(steps: { toolCalls: ToolChunk[]; toolResults: ToolChunk[] }[]): {
   outcome: CallOutcome | null;
   siteId: number | null;
+  zip: string | null;
   language: Language | null;
 } {
   const calls = steps.flatMap((s) => s.toolCalls).filter((c) => c.payload.toolName === 'find_sites');
@@ -100,13 +102,14 @@ function readToolUse(steps: { toolCalls: ToolChunk[]; toolResults: ToolChunk[] }
   const language = isLanguage(lastLanguage) ? lastLanguage : null;
 
   const last = results.at(-1);
-  if (!last) return { outcome: null, siteId: null, language };
-  if (last.payload.isError) return { outcome: 'error', siteId: null, language };
+  if (!last) return { outcome: null, siteId: null, zip: null, language };
+  if (last.payload.isError) return { outcome: 'error', siteId: null, zip: null, language };
   const output = last.payload.result as FindSitesOutput | undefined;
   const first = output?.sites?.[0];
+  const zip = output?.resolved_zip ?? null;
   return first
-    ? { outcome: 'site_given', siteId: first.site_id, language }
-    : { outcome: 'no_site_found', siteId: null, language };
+    ? { outcome: 'site_given', siteId: first.site_id, zip, language }
+    : { outcome: 'no_site_found', siteId: null, zip, language };
 }
 
 // One turn of an SMS or Messenger conversation: load history by contact hash, run the agent, store both messages.
@@ -120,6 +123,7 @@ export async function generateTextReply(args: {
   body: string;
   channel: TextChannel;
   logLabel: string;
+  context?: string; // extra facts for this turn, such as a volunteer's active help request (helper mode)
 }): Promise<TextReply> {
   const phoneHash = args.contactHash;
   // Messenger hashes never match a subscriber row, so a Messenger turn always takes the non-subscriber path.
@@ -132,7 +136,7 @@ export async function generateTextReply(args: {
     const language = emergency.language === 'es' ? 'es' : fallbackLanguage;
     const text = emergencyReply(language);
     await saveTurn(phoneHash, args.body, text);
-    return { text, outcome: 'escalated_911', siteId: null, language };
+    return { text, outcome: 'escalated_911', siteId: null, zip: null, language };
   }
 
   // Oldest first. Alert texts are stored here too, so "something closer?" has the alert it answers.
@@ -149,7 +153,7 @@ export async function generateTextReply(args: {
         { role: 'user' as const, content: args.body },
       ],
       {
-        system: systemNote(subscriber, disclosed, args.channel),
+        system: args.context ? `${systemNote(subscriber, disclosed, args.channel)}\n\n${args.context}` : systemNote(subscriber, disclosed, args.channel),
         maxSteps: 4,
         modelSettings: { maxOutputTokens: MAX_OUTPUT_TOKENS, timeout: { totalMs: AGENT_TIMEOUT_MS } },
         tracingOptions: { tags: [`m4-${args.channel}`] },
@@ -166,11 +170,12 @@ export async function generateTextReply(args: {
       text: disclosed ? text : `${aiDisclosure(language)}${args.channel === 'messenger' ? '\n\n' : '\n'}${text}`,
       outcome: tools.outcome,
       siteId: tools.siteId,
+      zip: tools.zip,
       language,
     };
   } catch (error) {
     console.error(`[m4] text agent failed for ${args.logLabel} (${reason(error)})`);
-    reply = { text: replyUnavailable(fallbackLanguage), outcome: 'error', siteId: null, language: fallbackLanguage };
+    reply = { text: replyUnavailable(fallbackLanguage), outcome: 'error', siteId: null, zip: null, language: fallbackLanguage };
   }
 
   // Stored user first, so the next turn sees the exchange in order.

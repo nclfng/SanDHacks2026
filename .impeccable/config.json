@@ -76,7 +76,7 @@
           "apps/web/src/styles.css"
         ],
         "createdAt": "2026-11-15T05:24:00.863Z",
-        "reason": "existing design: live-call shimmer (.agent.live .now) ported verbatim from apps/dashboard/index.html, signals an in-progress call"
+        "reason": "agent judgment: .agent.live shimmer marks a call step still pending; motion carries state, not decoration"
       }
     ]
   }
