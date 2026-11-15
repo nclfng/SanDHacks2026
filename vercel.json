@@ -2,5 +2,23 @@
   "installCommand": "cd apps/web && npm install",
   "buildCommand": "cd apps/web && npx vite build",
   "outputDirectory": "apps/web/dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.whosthrowingshade.us"
+        }
+      ],
+      "destination": "https://whosthrowingshade.us/$1",
+      "permanent": true
+    }
+  ]
 }
