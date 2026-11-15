@@ -16,7 +16,9 @@ export interface SiteDetail {
 }
 
 const qs = new URLSearchParams(location.search);
-export const API = qs.get('api') || 'http://localhost:4111';   // ?api=https://xxxx.ngrok-free.app
+// ?api=https://xxxx.ngrok-free.app overrides; the deployed site gets its API from VITE_API_URL (set in Vercel, not a secret).
+const DEPLOYED_API = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL?.replace(/\/+$/, '');
+export const API = qs.get('api') || DEPLOYED_API || 'http://localhost:4111';
 const NOW = qs.get('now');                                     // ?now=2026-11-16T11:00:00-08:00 replays a moment for demos
 const POLL_MS = 10000;
 
