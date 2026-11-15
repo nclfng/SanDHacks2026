@@ -9,7 +9,6 @@
   --zone: #0b74c9;           /* cool zone token */
   --paper: #eaf5fd;
   --forest: #0b2540;
-  --aqi-good: #a5d68f; --aqi-mod: #ecd670; --aqi-usg: #f4a765; --aqi-bad: #ee7a66;
   --r: 24px;
   --ease: cubic-bezier(.16, 1, .3, 1);
 }
@@ -81,7 +80,7 @@ h1, h2, h3, p { margin: 0; }
 .top { position: fixed; z-index: 500; top: 16px; left: 16px; right: 16px; display: flex; gap: 10px; align-items: center; pointer-events: none; }
 .top > * { pointer-events: auto; }
 .pill { height: 52px; padding: 0 18px; display: flex; align-items: center; gap: 12px; border-radius: 26px; white-space: nowrap; }
-.brand { padding-left: 9px; }
+.brand { padding-left: 9px; color: inherit; text-decoration: none; }   /* links to the resident home page at / */
 .brand .tk { width: 34px; height: 34px; background: var(--zone); color: #fff; }
 .brand b { font-weight: 500; font-size: 17px; letter-spacing: -.01em; }
 .brand span { color: var(--ink-2); }
@@ -94,6 +93,10 @@ h1, h2, h3, p { margin: 0; }
 .btn:disabled { background: rgba(11, 60, 110, .12); color: var(--ink-2); cursor: default; }
 /* Test alert by zip (SendAlert.tsx): pushed to the right end of the top bar. */
 .sendalert { margin-left: auto; padding-right: 8px; gap: 10px; }
+/* back to the resident home page at / */
+.nav { gap: 8px; padding-left: 14px; color: var(--blue); font-weight: 500; text-decoration: none; }
+.nav svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s var(--ease); }
+.nav:hover svg { transform: translateX(-3px); }
 .sendalert label { font-weight: 500; }
 .sendalert input { width: 72px; height: 36px; padding: 0 12px; font: inherit; color: var(--ink); text-align: center; letter-spacing: .04em; background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: 999px; }
 .sendalert .ok { color: var(--blue); }
@@ -122,7 +125,6 @@ h1, h2, h3, p { margin: 0; }
 .ztag { display: inline-block; margin-right: 7px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; line-height: 18px; vertical-align: 1px; white-space: nowrap; }
 .ztag.cz { background: var(--zone); color: #fff; }
 .ztag.ps { background: #fff; color: var(--zone); box-shadow: inset 0 0 0 1.5px var(--zone); }
-.aqi { display: inline-block; min-width: 34px; text-align: center; padding: 1px 7px; border-radius: 999px; color: #1b2014; font-weight: 500; font-size: 12.5px; }
 .legend { padding: 12px 22px 16px; display: grid; grid-template-columns: 14px 1fr; gap: 7px 10px; align-items: center; color: var(--ink-2); font-size: 12.5px; }
 .legend p { grid-column: 1 / -1; margin: 0 0 2px; color: var(--ink); font-weight: 500; font-size: 13px; }
 .legend p svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 5px; fill: none; stroke: var(--blue); stroke-width: 2.2; }
@@ -148,7 +150,7 @@ h1, h2, h3, p { margin: 0; }
 #zdetail .links a.ghost { background: rgba(255, 255, 255, .6); color: var(--blue); }
 
 /* readings */
-.now { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 22px 4px; }
+.now { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 22px 4px; }
 .now b { display: block; font-size: 28px; font-weight: 300; letter-spacing: -.02em; line-height: 1.1; }
 #readings .head { padding: 14px 22px 8px; display: flex; align-items: baseline; gap: 10px; }
 #readings .head h2 { font-size: 16px; font-weight: 400; }
@@ -158,7 +160,7 @@ h1, h2, h3, p { margin: 0; }
 .now span { color: var(--ink-2); font-size: 13px; }
 .note { padding: 8px 22px 14px; color: var(--ink-2); font-size: 13px; }
 .note em { font-style: normal; color: var(--ink); }
-.rrow { display: grid; grid-template-columns: 1fr 44px 44px 48px; gap: 8px; align-items: center; width: 100%; padding: 7px 22px; transition: background .2s; }
+.rrow { display: grid; grid-template-columns: 1fr 44px 44px; gap: 8px; align-items: center; width: 100%; padding: 7px 22px; transition: background .2s; }
 .rrow:hover, .rrow[aria-pressed=true] { background: rgba(255, 255, 255, .4); }
 .rrow[aria-pressed=true] .area { font-weight: 500; }
 .rrow .n, .rhead span + span { text-align: right; }

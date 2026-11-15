@@ -35,9 +35,26 @@ export async function sendMessengerReply(args: { pageId: string; psid: string; b
   }
 }
 
-// Sends one alert to an opted-in Messenger subscriber, from the Page they joined on. Never throws. On top of
-// sendMessengerReply's errors it returns messenger_window_closed when they have not written in the last
-// MESSENGER_WINDOW_HOURS (from the inbound calls rows); an unknown window counts as closed.
+// Sends one message the person did not just ask for (an alert, a neighbor's help request), from the Page they
+// joined on. Never throws. On top of sendMessengerReply's errors it returns messenger_window_closed when they have
+// not written in the last MESSENGER_WINDOW_HOURS (from the inbound calls rows); an unknown window counts as closed.
+// Writes no calls row. `what` names the message in logs.
+export async function sendMessengerInWindow(contact: MessengerContact, body: string, what: string): Promise<SendSmsOutput> {
+  if (!body.trim() || body.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_body' };
+  const last = await lastInboundAt(contact.phone_hash, 'messenger').catch(() => null);
+  if (!last || Date.now() - last.getTime() >= MESSENGER_WINDOW_HOURS * 3600_000) {
+    return { ok: false, error: 'messenger_window_closed' };
+  }
+  try {
+    await sendTwilioMessenger({ pageId: contact.messenger_page_id, psid: contact.messenger_psid, body });
+    return { ok: true };
+  } catch (error) {
+    console.warn(`[m4] ${what} to ${messengerLogLabel(contact.phone_hash)} not sent: ${reason(error)}`);
+    return failure(error);
+  }
+}
+
+// Sends one alert to an opted-in Messenger subscriber through sendMessengerInWindow. Never throws.
 // A sent alert gets a calls row (outbound, messenger, outcome sms_sent, alert_id), which is what the per-alert
 // and cooldown guards in alerts/dispatch.ts read. The caller has already checked that this person is opted in.
 export async function sendMessengerAlert(args: {
@@ -50,19 +67,8 @@ export async function sendMessengerAlert(args: {
 }): Promise<SendSmsOutput> {
   const { contact } = args;
   const label = messengerLogLabel(contact.phone_hash);
-  if (!args.body.trim() || args.body.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_body' };
-
-  const last = await lastInboundAt(contact.phone_hash, 'messenger').catch(() => null);
-  if (!last || Date.now() - last.getTime() >= MESSENGER_WINDOW_HOURS * 3600_000) {
-    return { ok: false, error: 'messenger_window_closed' };
-  }
-
-  try {
-    await sendTwilioMessenger({ pageId: contact.messenger_page_id, psid: contact.messenger_psid, body: args.body });
-  } catch (error) {
-    console.warn(`[m4] alert ${args.alertId} to ${label} not sent: ${reason(error)}`);
-    return failure(error);
-  }
+  const sent = await sendMessengerInWindow(contact, args.body, `alert ${args.alertId}`);
+  if (!sent.ok) return sent;
 
   // The alert is out. If the log row fails, still report success so it is not sent again.
   await insertCall({

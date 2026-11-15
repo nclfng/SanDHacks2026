@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T22:30:00.000Z",
+  "generatedAt": "2026-11-15T12:00:00.000Z",
   "title": "Design System: Shade",
   "extensions": {
     "colorMeta": {
@@ -51,6 +51,11 @@
         "name": "token",
         "value": "0 0 0 3px rgba(255,255,255,.9), 0 6px 12px -4px rgba(11,50,100,.45)",
         "purpose": "Map tokens: white ring plus soft drop."
+      },
+      {
+        "name": "resident-action",
+        "value": "0 14px 28px -14px rgba(3,105,161,.8), inset 0 1px 0 rgba(255,255,255,.25)",
+        "purpose": "Filled Deep Water resident pills (Call now, Open Messenger)."
       }
     ],
     "motion": [
@@ -58,12 +63,52 @@
         "name": "ease-out",
         "value": "cubic-bezier(.16, 1, .3, 1)",
         "purpose": "All state transitions, 200-250ms."
+      },
+      {
+        "name": "zone-ripple",
+        "value": "1.6s ring, scale 1 to 3.6, opacity .75 to 0, delay min(km*28ms, 1400ms) from county center",
+        "purpose": "One ring spreads once from each resident overview token on load; tokens visible from the start; off under reduced motion."
       }
     ],
     "breakpoints": [
       {
         "name": "stack",
         "value": "1000px"
+      },
+      {
+        "name": "resident-sheet",
+        "value": "900px"
+      },
+      {
+        "name": "resident-narrow",
+        "value": "520px"
+      }
+    ],
+    "typographyMeta": {
+      "display-resident": {
+        "displayName": "Resident display",
+        "purpose": "Front-door headline on the resident home; join steps down to 300 at 32-42px."
+      },
+      "message": {
+        "displayName": "Message",
+        "purpose": "The exact outgoing Messenger text inside the bubble."
+      }
+    },
+    "materials": [
+      {
+        "name": "liquid-glass",
+        "value": "linear-gradient(160deg, rgba(255,255,255,.66), rgba(226,242,253,.42) 45%, rgba(255,255,255,.56)); backdrop-filter: url(#liquid) blur(14px) saturate(190%) brightness(1.06)",
+        "purpose": "Staff panels and every top pill; plain blur(22px) outside Chromium."
+      },
+      {
+        "name": "reading-glass",
+        "value": "linear-gradient(160deg, rgba(255,255,255,.86), rgba(236,247,254,.78) 45%, rgba(255,255,255,.84)); backdrop-filter: blur(26px) saturate(170%)",
+        "purpose": "Resident panels holding reading text; no #liquid displacement."
+      },
+      {
+        "name": "reduced-transparency",
+        "value": "#f4faff, no backdrop-filter",
+        "purpose": "prefers-reduced-transparency swap for both glass densities."
       }
     ]
   },
@@ -106,14 +151,46 @@
       "description": "Map marker for an open official cool zone.",
       "html": "<div class=\"ds-zone\"><svg viewBox=\"0 0 24 24\"><path d=\"M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9\"/></svg></div>",
       "css": ".ds-zone{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:#0b74c9;color:#fff;box-shadow:0 0 0 3px #fff,0 6px 12px -4px rgba(11,50,100,.45)}.ds-zone svg{width:58%;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}"
+    },
+    {
+      "name": "Call Now Pill",
+      "kind": "button",
+      "refersTo": "call-now",
+      "description": "Resident lead action: call the Shade line.",
+      "html": "<a class=\"ds-call\" href=\"#\"><span class=\"ds-ic\"><svg viewBox=\"0 0 24 24\"><path d=\"M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2\"/></svg></span><span class=\"ds-say\"><b>Call now</b><small>Any phone, any language</small></span><span class=\"ds-num\">(619) 393-8334</span></a>",
+      "css": ".ds-call{display:flex;align-items:center;gap:14px;min-height:72px;padding:0 22px 0 12px;border-radius:36px;background:#0369a1;color:#fff;text-decoration:none;font:400 17px \"Hanken Grotesk\",sans-serif;box-shadow:0 14px 28px -14px rgba(3,105,161,.8),inset 0 1px 0 rgba(255,255,255,.25);transition:background .2s,transform .25s cubic-bezier(.16,1,.3,1)}.ds-call:hover{background:#075985}.ds-call:active{transform:scale(.98)}.ds-call:focus-visible{outline:2px solid #0369a1;outline-offset:3px}.ds-ic{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center}.ds-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.ds-say{display:grid;line-height:1.2}.ds-say b{font-size:21px;font-weight:500}.ds-say small{font-size:14px;color:#d5ebfa}.ds-num{margin-left:auto;font:500 15px \"Red Hat Mono\",monospace}"
+    },
+    {
+      "name": "Option Pill",
+      "kind": "button",
+      "refersTo": "option-pill",
+      "description": "Secondary resident choice (alerts, volunteer), used in pairs.",
+      "html": "<a class=\"ds-opt\" href=\"#\"><span class=\"ds-oic\"><svg viewBox=\"0 0 24 24\"><path d=\"M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4\"/></svg></span><span class=\"ds-osay\"><b>Get heat alerts</b><small>On Messenger</small></span><span class=\"ds-go\"><svg viewBox=\"0 0 24 24\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></span></a>",
+      "css": ".ds-opt{display:flex;align-items:center;gap:12px;min-height:64px;padding:0 14px 0 10px;border-radius:32px;background:rgba(255,255,255,.6);color:#0b2540;text-decoration:none;font:400 17px \"Hanken Grotesk\",sans-serif;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);transition:background .2s}.ds-opt:hover{background:rgba(255,255,255,.88)}.ds-opt:hover .ds-go{transform:translateX(3px)}.ds-opt:focus-visible{outline:2px solid #0369a1;outline-offset:3px}.ds-oic{width:42px;height:42px;border-radius:50%;background:#fff;color:#0369a1;display:grid;place-items:center;box-shadow:0 3px 8px -4px rgba(11,60,110,.35)}.ds-opt svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.ds-osay{display:grid;line-height:1.2}.ds-osay b{font-weight:500}.ds-osay small{font-size:14px;color:#3f5872}.ds-go{margin-left:auto;color:#0369a1;display:grid;transition:transform .25s cubic-bezier(.16,1,.3,1)}"
+    },
+    {
+      "name": "Pill Text Field",
+      "kind": "input",
+      "refersTo": "input-pill",
+      "description": "Resident zip and phone entry.",
+      "html": "<label class=\"ds-field\"><span>ZIP code</span><input placeholder=\"92101\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;font:500 15px \"Hanken Grotesk\",sans-serif;color:#0b2540}.ds-field input{height:56px;padding:0 20px;font:400 18px \"Hanken Grotesk\",sans-serif;color:#0b2540;background:rgba(255,255,255,.82);border:1px solid rgba(11,60,110,.18);border-radius:999px;outline:none;transition:border-color .2s,box-shadow .2s}.ds-field input::placeholder{color:#586e86}.ds-field input:focus{border-color:#0369a1;box-shadow:0 0 0 3px rgba(3,105,161,.18)}"
+    },
+    {
+      "name": "Message Bubble",
+      "kind": "custom",
+      "refersTo": "message-bubble",
+      "description": "The exact outgoing Messenger text, live as the resident types.",
+      "html": "<p class=\"ds-bubble\">JOIN 92101 6195550100</p>",
+      "css": ".ds-bubble{display:inline-block;margin:0;padding:12px 18px;border-radius:22px 22px 6px 22px;background:#0369a1;color:#fff;font:500 17px/1.35 \"Red Hat Mono\",monospace;letter-spacing:.02em;box-shadow:0 8px 18px -10px rgba(3,105,161,.8)}"
     }
   ],
   "narrative": {
     "northStar": "The Water Chart",
-    "overview": "A pale blue chart of the county fills the room; clear glass instruments rest on it and bend the map beneath them. The map is the workspace and never recedes behind chrome.",
+    "overview": "A pale blue chart of the county fills the room; clear glass instruments rest on it and bend the map beneath them. The map is the workspace and never recedes behind chrome. Residents get the same chart under the same glass, made denser where they read.",
     "keyCharacteristics": [
       "Full-bleed map, panels float on it.",
-      "Liquid glass for staff, opaque white cards for residents.",
+      "One material, two densities: full liquid glass for staff panels and top pills; denser, non-refracting glass for resident reading panels.",
       "Round tokens carry meaning on the map.",
       "Thin, large numerals for readings; small mono for codes and times."
     ],
@@ -127,6 +204,11 @@
         "name": "The Tabular Rule",
         "body": "All figures use tabular numerals so columns of readings line up.",
         "section": "typography"
+      },
+      {
+        "name": "The Overview Chart Rule",
+        "body": "The resident chart is a still overview: no pan, no zoom, no controls; only sites inside San Diego County are drawn or counted.",
+        "section": "elevation"
       }
     ],
     "dos": [
@@ -138,7 +220,7 @@
     ],
     "donts": [
       "Don't use orange for anything but a person requesting help, except inside an AQI chip.",
-      "Don't put glass on resident cards; they must stay readable in sunlight.",
+      "Don't put refracting (#liquid) or thin glass behind resident reading text; resident panels use the denser reading glass.",
       "Don't add colored glow shadows or violet.",
       "Don't show a caller's name or phone number; location and stated needs only.",
       "Don't present a discovered site the same way as an official one."

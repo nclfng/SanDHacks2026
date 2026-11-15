@@ -10,6 +10,10 @@ import { updateCallState } from './call-state';
 export const sendSmsBody = z.object({
   site_id: z.coerce.number().int(),
   language: z.enum(['en', 'es', 'tl', 'vi', 'zh']).optional().catch(undefined),
+  // Group and assistance from the intake. A bad value is dropped rather than blocking the send.
+  party_size: z.coerce.number().int().min(1).max(50).optional().catch(undefined),
+  needs_assistance: z.boolean().optional().catch(undefined),
+  assistance_details: z.string().trim().min(1).max(80).optional().catch(undefined),
   caller_id: z.string().optional(),
   conversation_id: z.string().optional(),
 });
@@ -27,7 +31,14 @@ export async function handleSendSms(body: z.infer<typeof sendSmsBody>): Promise<
     return { ok: false, error: "I can't see your phone number, so I can't send a text. Please write the address down." };
   }
   try {
-    const result = await sendSms({ to, site_id: body.site_id, language: body.language });
+    const result = await sendSms({
+      to,
+      site_id: body.site_id,
+      language: body.language,
+      party_size: body.party_size,
+      needs_assistance: body.needs_assistance,
+      assistance_details: body.needs_assistance ? body.assistance_details : undefined,
+    });
     if (result.ok) {
       updateCallState(body.conversation_id, { smsSent: true });
       void logEvent(body.conversation_id, 'sms_sent', 'Texted directions to the caller');

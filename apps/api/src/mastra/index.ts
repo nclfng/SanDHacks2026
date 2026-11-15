@@ -8,8 +8,6 @@ import {
   Observability,
   SensitiveDataFilter,
 } from '@mastra/observability';
-import { agent } from './agents/agent';
-import { startScheduleTool, stopScheduleTool } from './tools/schedule-tools';
 import { elevenLabsRoutes } from '../elevenlabs/routes';
 import { dashboardRoutes } from '../dashboard/routes';
 import { requestRoutes } from '../requests/routes';
@@ -23,9 +21,8 @@ export const mastra = new Mastra({
   bundler: {
     externals: ['@duckdb/node-bindings'],
   },
-  agents: { agent, textAgent },
+  agents: { textAgent },
   workflows: { alertWorkflow, readingAlertWorkflow },
-  tools: { startScheduleTool, stopScheduleTool },
   storage: new MastraCompositeStore({
     id: 'composite-storage',
     default: new LibSQLStore({

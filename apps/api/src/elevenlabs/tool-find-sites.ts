@@ -37,7 +37,8 @@ async function logTrail(conversationId: string | undefined, result: FindSitesOut
   const how = result.location_precision ? ` (from ${HOW[result.location_precision]})` : '';
   await logEvent(conversationId, 'located', result.resolved_zip ? `Placed the caller in ${result.resolved_zip}${how}` : 'Could not place the caller yet. Asking for a cross street');
   const top = result.sites[0];
-  if (top) await logEvent(conversationId, 'site_suggested', `Suggested ${top.name}${top.closes_at ? `, open until ${to12h(top.closes_at)}` : ''}`);
+  const open = top?.hours_today.includes('Open 24 hours') ? ', open 24 hours' : top?.closes_at ? `, open until ${to12h(top.closes_at)}` : '';
+  if (top) await logEvent(conversationId, 'site_suggested', `Suggested ${top.name}${open}`);
   else if (result.resolved_zip) await logEvent(conversationId, 'no_site', 'No open cool zone nearby. Gave the 2-1-1 line');
 }
 

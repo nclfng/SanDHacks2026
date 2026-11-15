@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { get, type SiteDetail, type Zone } from './api';
-import { DAY, KIND, href, to12h, todayIndex } from './format';
+import { DAY, KIND, hoursSpan, href, to12h, todayIndex } from './format';
 
 const Tag = ({ z }: { z: Zone }) => z.tier === 'official' ? <span className="ztag cz">Cool Zone</span> : <span className="ztag ps">Public Space</span>;
-const closes = (z: Zone) => (z.closes_at ? to12h(z.closes_at) : '');   // the state only carries open sites, so closes_at is set
+// The state only carries open sites, so a null closes_at means open 24 hours.
 
 interface Props { sites: Zone[]; summary: string; summaryTitle?: string; zone: number | null; onZone(id: number): void; onClear(): void }
 
@@ -29,15 +29,15 @@ export function ZonesPanel({ sites, summary, summaryTitle, zone, onZone, onClear
           {rows.length ? rows.map((x) => (
             <button key={x.id} className={`zrow ${zone === x.id ? 'sel' : ''}`} title={`${x.address}. Today: ${x.hours_today}`} onClick={() => onZone(x.id)}>
               <span><h3>{x.name}</h3><span className="sub"><Tag z={x} />{KIND[x.kind]}</span></span>
-              <span className="closes">{closes(x)}<small>closes</small></span>
+              <span className="closes">{x.closes_at ? <>{to12h(x.closes_at)}<small>closes</small></> : <>24 hours<small>open</small></>}</span>
             </button>
           )) : <p className="none">{needle ? 'No open cool zone matches that name.' : 'No cool zones are open right now.'}</p>}
         </div>
       )}
       <div className="legend rule">
         <p><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>Caller markers on the map</p>
-        <i className="tk req"></i><span>Requesting: waiting for a dispatcher</span>
-        <i className="tk req incoming"></i><span>Incoming: help confirmed by a dispatcher</span>
+        <i className="tk req"></i><span>Requesting: waiting for a neighbor to say yes</span>
+        <i className="tk req incoming"></i><span>Incoming: a neighbor said yes</span>
         <i className="dot"></i><span>Called or texted in the last 24h</span>
       </div>
     </section>
@@ -66,7 +66,7 @@ function ZoneDetail({ z, onBack }: { z: Zone; onBack(): void }) {
       {href(g?.photo) && <img src={href(g?.photo)} alt="" />}
       <h3>{z.name}</h3>
       <span className="sub"><Tag z={z} />{det?.category || KIND[z.kind]}{g?.rating ? ` · ★ ${g.rating} (${g.ratings} on Google)` : ''}</span>
-      <p className="status">Open until {closes(z)}</p>
+      <p className="status">{z.closes_at ? `Open until ${to12h(z.closes_at)}` : 'Open 24 hours'}</p>
       {note && <p className="dim">{note}</p>}
       {g?.summary && <p className="dim" style={{ marginTop: 8 }}>{g.summary}</p>}
       <h4>Details</h4>
@@ -79,7 +79,7 @@ function ZoneDetail({ z, onBack }: { z: Zone; onBack(): void }) {
       {det ? <>
         <h4>Hours</h4>
         <dl>{[1, 2, 3, 4, 5, 6, 0].map((n) => {
-          const v = det.hours.weekly.filter((i) => i.day === n).map((i) => `${to12h(i.open)} - ${to12h(i.close)}`).join(', ') || 'Closed';
+          const v = det.hours.weekly.filter((i) => i.day === n).map(hoursSpan).join(', ') || 'Closed';
           const cls = n === today ? 'today' : undefined;
           return <Fragment key={n}><dt className={cls}>{DAY[n]}</dt><dd className={cls}>{v}</dd></Fragment>;
         })}</dl>

@@ -2,6 +2,7 @@
 // Idempotent: tools are matched by name, the agent by ELEVENLABS_AGENT_ID.
 //   cd apps/api && npm run el:sync
 import { buildAgentBody } from '../agent.config.ts';
+import { checkRequestStatusTool } from '../tools/check_request_status.ts';
 import { findSitesTool } from '../tools/find_sites.ts';
 import { requestHelpTool } from '../tools/request_help.ts';
 import { sendSmsTool } from '../tools/send_sms.ts';
@@ -11,7 +12,10 @@ const apiUrl = env('PUBLIC_API_URL').replace(/\/$/, '');
 const toolSecret = env('EL_TOOL_SECRET');
 
 async function upsertTools(): Promise<string[]> {
-  const defs = [findSitesTool(apiUrl, toolSecret), sendSmsTool(apiUrl, toolSecret), requestHelpTool(apiUrl, toolSecret)];
+  const defs = [
+    findSitesTool(apiUrl, toolSecret), sendSmsTool(apiUrl, toolSecret), requestHelpTool(apiUrl, toolSecret),
+    checkRequestStatusTool(apiUrl, toolSecret),
+  ];
   const existing = await el<{ tools: { id: string; tool_config: { name: string } }[] }>('GET', '/v1/convai/tools');
   const ids: string[] = [];
   for (const def of defs) {

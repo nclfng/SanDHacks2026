@@ -1,4 +1,4 @@
-// Webhook tool: file a help request for a dispatcher (a person) to answer.
+// Webhook tool: file a help request; neighbors in the caller's zip are messaged and the first YES takes it.
 // The phone number comes from the call itself (system__caller_id), never from the LLM.
 // Handled by apps/api/src/requests/requests.ts.
 
@@ -7,9 +7,9 @@ export const requestHelpTool = (apiUrl: string, toolSecret: string) => ({
     type: 'webhook',
     name: 'request_help',
     description:
-      'Send a help request to a human dispatcher when the caller asks for a ride, a pickup, or someone to check on them, ' +
-      'or cannot get to a site on their own. It only sends the request. It does not confirm that help is coming. ' +
-      'Read the say_this line from the result to the caller.',
+      'Send a help request to registered neighbors nearby when the caller needs someone to come, asks for a ride, a pickup, ' +
+      'or someone to check on them, or cannot get to a site on their own. It only sends the request. It does not confirm ' +
+      'that help is coming; check_request_status does. Read the say_this line from the result to the caller.',
     response_timeout_secs: 10,
     api_schema: {
       url: `${apiUrl}/el/tools/request-help`,

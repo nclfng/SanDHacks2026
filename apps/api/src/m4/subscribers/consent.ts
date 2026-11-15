@@ -97,6 +97,7 @@ export async function subscribeMessenger(args: {
   needs?: CallerNeeds;
   phoneE164?: string | null; // a phone number to link this profile to; only its hash is stored
   name?: string | null;
+  volunteer?: boolean; // JOIN ... VOLUNTEER; false turns it off, undefined (START) keeps what is on file
 }): Promise<SubscriberRow> {
   if (!/^\d{5}$/.test(args.zip)) throw new Error('subscribeMessenger: the zip must be five digits');
   const existing = await getSubscriber(args.contactHash);
@@ -110,6 +111,7 @@ export async function subscribeMessenger(args: {
     consentAt: new Date(),
     linkedPhoneHash: args.phoneE164 ? hashPhone(args.phoneE164) : null,
     displayName: args.name ?? null,
+    volunteer: args.volunteer,
   });
 }
 

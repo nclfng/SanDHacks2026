@@ -5,7 +5,7 @@ import { hashPhone, maskPhone, toE164 } from '../phone';
 import { isOptedOut } from '../subscribers/consent';
 import { LANGUAGES } from '../types';
 import type { AlertChannel, Language, MessengerContact, Reading, SendSmsInput, SendSmsOutput } from '../types';
-import { siteMessage } from './templates';
+import { siteMessage, type PartyInfo } from './templates';
 import { sendTwilioSms, sendTwilioWhatsApp, TwilioError, type WhatsAppTemplate } from './twilio';
 
 // 'site': one site's details (send_sms). 'alert': alert fan-out. 'reply': text agent answer.
@@ -121,7 +121,13 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsOutput> {
   let messengerBody: string;
   let siteId: number;
   try {
-    const text = await siteText(input.site_id, language);
+    // Group size and assistance from the voice intake, when the agent passed them.
+    const party: PartyInfo = {
+      size: input.party_size,
+      needsAssistance: input.needs_assistance,
+      details: input.assistance_details,
+    };
+    const text = await siteText(input.site_id, language, party);
     if (!text) return { ok: false, error: 'site_not_found' };
     ({ body, messengerBody, siteId } = text);
   } catch (error) {
@@ -169,14 +175,15 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsOutput> {
 async function siteText(
   siteId: number,
   language: Language,
+  party?: PartyInfo,
 ): Promise<{ body: string; messengerBody: string; siteId: number } | null> {
   const site = await getSite(siteId);
   if (!site) return null;
   // A missing air quality reading must not hold the text back.
   const reading: Reading | null = site.zip ? await getLatestReading(site.zip).catch(() => null) : null;
   return {
-    body: siteMessage({ site, reading, language }),
-    messengerBody: siteMessage({ site, reading, language, style: 'messenger' }),
+    body: siteMessage({ site, reading, language, party }),
+    messengerBody: siteMessage({ site, reading, language, style: 'messenger', party }),
     siteId: site.id,
   };
 }

@@ -177,6 +177,9 @@ export async function dispatchAlert(alert: AlertRow): Promise<{ textsSent: numbe
   return { textsSent };
 }
 
+// Long enough for a demo, short enough that old button presses drop off the dashboard.
+const MOCK_ALERT_TTL_HOURS = 3;
+
 // Demo path: inserts a kind = 'mock' alert with a null nws_id, then dispatches it.
 // It skips the re-crawl the real flow asks M2 for: the button should answer in seconds.
 // Throws on bad zips. Pressing it twice makes two alerts, and each texts everyone in the zips.
@@ -190,7 +193,7 @@ export async function triggerMockAlert(args: { zips: string[]; headline?: string
     zips: [...new Set(args.zips)],
     headline: args.headline ?? 'Test alert from the Shade demo button. Not a real warning.',
     onsetAt: new Date(),
-    expiresAt: null,
+    expiresAt: new Date(Date.now() + MOCK_ALERT_TTL_HOURS * 3600_000),
   });
   const { textsSent } = await dispatchAlert(row);
   // The inserted row still says 0.

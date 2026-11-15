@@ -13,8 +13,7 @@
     "el:call": "tsx --env-file=../../.env ../../agent/scripts/outbound-call.ts",
     "typecheck": "tsc",
     "el:simulate": "tsx --env-file=../../.env ../../agent/scripts/simulate.ts",
-    "el:transcript": "tsx --env-file=../../.env ../../agent/scripts/spike-transcript.ts",
-    "sites:check": "tsx --env-file=../../.env src/shared/check-sites.ts"
+    "el:transcript": "tsx --env-file=../../.env ../../agent/scripts/spike-transcript.ts"
   },
   "keywords": [],
   "author": "",

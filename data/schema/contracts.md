@@ -28,6 +28,7 @@ Only the writer changes rows in a table. Everyone else treats it as read-only.
 ### `send_sms(SendSmsInput) -> SendSmsOutput`
 - **Owner: M4** (Twilio sender). M3 calls it from the voice agent's server tool.
 - Builds the message from `site_id` (address, hours today, map link, AQI) in the requested language.
+- Optional `party_size`, `needs_assistance`, `assistance_details` (from the voice intake) add a group line and, only when assistance is needed, an assistance line to the message.
 - Must not send to a number whose subscriber row has `opted_out_at` set. A caller who asks for a text during a call counts as consent for that one message.
 
 ## Conventions

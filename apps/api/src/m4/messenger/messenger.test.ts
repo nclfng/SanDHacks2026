@@ -17,23 +17,28 @@ import { parseJoinMessage } from './join';
 
 describe('parseJoinMessage', () => {
   it('reads zip and phone in either order and any common format, ignoring other words', () => {
-    assert.deepEqual(parseJoinMessage('JOIN 92105'), { zip: '92105', phoneE164: null, phoneInvalid: false });
+    assert.deepEqual(parseJoinMessage('JOIN 92105'), { zip: '92105', phoneE164: null, phoneInvalid: false, volunteer: false });
     assert.deepEqual(parseJoinMessage('JOIN 92105 16195550147'), {
       zip: '92105',
       phoneE164: '+16195550147',
       phoneInvalid: false,
+      volunteer: false,
     });
     assert.deepEqual(parseJoinMessage('join 92105 (619) 555-0147 Ana Ruiz'), {
       zip: '92105',
       phoneE164: '+16195550147',
       phoneInvalid: false,
+      volunteer: false,
     });
     assert.deepEqual(parseJoinMessage('UNIRME 6195550147 92105'), {
       zip: '92105',
       phoneE164: '+16195550147',
       phoneInvalid: false,
+      volunteer: false,
     });
     assert.equal(parseJoinMessage('JOIN 92105 +1 619 555 0147').phoneE164, '+16195550147');
+    assert.equal(parseJoinMessage('JOIN 92105 volunteer').volunteer, true);
+    assert.equal(parseJoinMessage('UNIRME VOLUNTARIA 92105 6195550147').volunteer, true);
   });
 
   it('flags digits that are not a phone number', () => {
@@ -314,6 +319,15 @@ describe('handleInboundMessenger', () => {
     const repeat = await handleInboundMessenger(msg);
     assert.deepEqual(repeat, { reply: null, sent: null });
     assert.equal(twilioSends().length, 1);
+  });
+
+  it('marks JOIN <zip> VOLUNTEER as a volunteer, and invites a plain JOIN to become one', async () => {
+    const plain = await handleInboundMessenger(parseMessengerWebhook(webhook('JOIN 92105', 'SMtest-join-plain'))!);
+    assert.match(plain.reply!, /Send JOIN 92105 VOLUNTEER/);
+    const vol = await handleInboundMessenger(parseMessengerWebhook(webhook('JOIN 92105 VOLUNTEER', 'SMtest-join-vol'))!);
+    assert.match(vol.reply!, /You're a volunteer/);
+    const upserts = sqlCalls().filter((sql) => /insert into subscribers/.test(sql.query));
+    assert.deepEqual(upserts.map((sql) => sql.params[9]), [false, true]);
   });
 
   it('signs JOIN up for Messenger alerts, storing the ids only on the subscriber row', async () => {

@@ -69,7 +69,8 @@ async function sqlRows(query: string, timeoutMs: number): Promise<Record<string,
 }
 
 async function neonRows(): Promise<Row[] | null> {
-  const rows = await sqlRows('select * from sites', 2000);
+  // 5 s: a deployed server waking from sleep can take longer than 2 s for this first ~1 MB read.
+  const rows = await sqlRows('select * from sites', 5000);
   return rows ? rows.map(normalize) : null;
 }
 
@@ -107,8 +108,16 @@ let cache: { at: number; rows: Row[]; source: 'neon' | 'seed' } | null = null;
 async function catalog(): Promise<{ rows: Row[]; source: 'neon' | 'seed' }> {
   if (cache && Date.now() - cache.at < CATALOG_TTL_MS) return cache;
   const db = await neonRows();
-  cache = db ? { at: Date.now(), rows: db, source: 'neon' } : { at: Date.now(), rows: await seedRows(), source: 'seed' };
-  return cache;
+  if (db) {
+    cache = { at: Date.now(), rows: db, source: 'neon' };
+    return cache;
+  }
+  // Neon missed: keep serving the last good catalog rather than falling back. The seed files are not in the deployed
+  // bundle, so the fallback there is empty; never cache an empty fallback, so the next call tries Neon again.
+  if (cache?.source === 'neon') return cache;
+  const seed = await seedRows();
+  if (seed.length) cache = { at: Date.now(), rows: seed, source: 'seed' };
+  return { rows: seed, source: 'seed' };
 }
 
 // ---------------------------------------------------------------- where is the caller?
@@ -123,7 +132,9 @@ async function places(): Promise<Places> {
     for (const r of rows) (r.kind === 'zip' ? out.zips : out.places)[String(r.key)] = { lat: Number(r.lat), lon: Number(r.lon) };
     return (placesCache = out);
   }
-  return (placesCache = ((await readSeed('places.json')) as Places | null) ?? { zips: {}, places: {} });
+  // Not cached when Neon missed: the seed file is absent when deployed, and caching that would break zip and town
+  // lookups until the server restarts.
+  return ((await readSeed('places.json')) as Places | null) ?? { zips: {}, places: {} };
 }
 
 const km = (a: Pt, b: Pt): number => {
@@ -210,7 +221,7 @@ async function landmarks() {
   const raw: [string, number, number, string, number][] | null = rows
     ? rows.map((r) => [String(r.name), Number(r.lat), Number(r.lon), String(r.kind), Number(r.weight)])
     : ((await readSeed('landmarks.json')) as [string, number, number, string, number][] | null);
-  if (!raw) return (lmIndex = null);
+  if (!raw) return null; // not cached: try Neon again on the next call
   const df = new Map<string, number>();
   const items: Landmark[] = raw.map(([name, lat, lon, kind, weight]) => {
     const tokens = [...new Set(toTokens(name))];
@@ -300,6 +311,9 @@ function localNow(now: Date): { dow: number; date: string; min: number } {
 const toMin = (t: string): number => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const hhmm = (m: number): string => { const x = m % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
 
+// "Open 24 hours" in minutes: 00:00-23:59 as stored, or 00:00-00:00 read as [0, 1440].
+const allDay = ([o, c]: [number, number]): boolean => o === 0 && c >= 1439;
+
 interface Status { open: boolean; closesMin: number | null; nextOpenMin: number | null; intervals: [number, number][]; note: string | null }
 function status(h: SiteHours, now: { dow: number; date: string; min: number }, ignoreAllDay = false): Status {
   // Minutes since midnight. An interval whose close is at or before its open runs PAST midnight ("7 AM - 2 AM"); a close of
@@ -309,7 +323,7 @@ function status(h: SiteHours, now: { dow: number; date: string; min: number }, i
   for (const [o, c] of day(now.dow)) intervals.push(c > o ? [o, c] : c === 0 ? [o, 1440] : [o, 1440 + c]);
   for (const [o, c] of day((now.dow + 6) % 7)) if (c <= o && c > 0) intervals.push([0, c]); // still open after midnight from last night
   // Google's "open 24 hours" (00:00-23:59) on a place we only know from Maps is almost always wrong for a building: ignore it there.
-  if (ignoreAllDay) intervals = intervals.filter(([o, c]) => !(o === 0 && c >= 1439));
+  if (ignoreAllDay) intervals = intervals.filter((i) => !allDay(i));
   const ex = h.exceptions?.find((e) => e.date === now.date);
   let note: string | null = null;
   if (ex?.closed) { intervals = []; note = ex.note ? `closed today for ${ex.note}` : 'closed today'; }
@@ -447,7 +461,7 @@ async function findSitesCore(input: FindSitesInput): Promise<FindSitesOutput> {
     const closes = st.closesMin!;
     const coolZone = r.ac_source === 'official_program';
     const callAhead = r.tier === 'discovered' || r.verification === 'conflict';
-    const until = `open until ${speakTime(closes, lt.min)}`;
+    const until = st.intervals.some(allDay) && closes >= 1439 ? 'open 24 hours' : `open until ${speakTime(closes, lt.min)}`;
     const nm = r.name === r.name.toUpperCase() ? r.name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : r.name; // read ALL-CAPS names naturally
     const here = c.miles < 0.06;                                                         // the caller is standing at this very place
     const lead = i === 0 ? (loc.place && !here ? `From ${loc.place}, the closest option is` : 'The closest option is') : 'Another option is';
@@ -473,7 +487,7 @@ async function findSitesCore(input: FindSitesInput): Promise<FindSitesOutput> {
     return {
       site_id: r.id, name: r.name, kind: r.kind, tier: r.tier, address: r.address,
       open_now: true, closes_at: hhmm(closes),
-      hours_today: st.intervals.map(([o, e]) => `${clock(o)} - ${clock(e)}`).join(', '),
+      hours_today: st.intervals.map((i) => (allDay(i) ? 'Open 24 hours' : `${clock(i[0])} - ${clock(i[1])}`)).join(', '),
       travel_minutes: c.travel, distance_miles: Math.round(c.miles * 10) / 10,
       aqi: null, // AirNow is not wired yet; the contract allows null
       has_filtration: r.has_filtration, confidence: r.confidence, call_ahead: callAhead,

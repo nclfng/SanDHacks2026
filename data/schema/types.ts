@@ -144,6 +144,9 @@ export interface SendSmsInput {
   to: string;                     // E.164
   site_id: number;
   language?: Language;
+  party_size?: number;            // people in the caller's group, including the caller
+  needs_assistance?: boolean;     // someone in the group needs help (wheelchair, walker, medical need...)
+  assistance_details?: string;    // what kind, in the caller's words, e.g. "uses a wheelchair"; only with needs_assistance
 }
 /**
  * note: what the voice agent should tell the caller about delivery, when it is not a plain text. M4 sets it when the

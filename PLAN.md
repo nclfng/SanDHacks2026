@@ -2,130 +2,113 @@
 
 ## Goal
 
-Turn Shade from a directions-only voice agent into a triage pipeline with a human dispatcher inbox. A caller who needs more than directions gets a help request. Gemini structures and ranks the request. A dispatcher on the staff dashboard accepts, declines or closes it. The agent tells the caller only what the request record supports.
+Turn Shade from a directions-only voice agent into a neighbor-help line. The agent asks whether the caller needs someone to come or just directions. A caller who needs someone gets a help request. Gemini turns the caller's words into short need facts for the dashboard. Registered neighbors in the caller's zip get a message, and the first to reply YES takes the request. The agent, still on the line, tells the caller only what the request record supports.
 
 Product context: `PRODUCT.md`. Architecture: `docs/PROJECT.md`.
 
 ## Locked implementation decisions
 
-- **Help types:** `volunteer_pickup`, `ride_211`, `wellness_check`. The dispatcher picks one on accept.
-- **Request status:** `requesting -> incoming | declined -> closed`. Dashboard labels stay "Requesting" and "Incoming" (`PRODUCT.md`). Only dispatcher endpoints change status. No model output changes status.
-- **Templates:** every request tool result carries a `say_this` line chosen in code from the status, like `spoken_summary` in `find_sites`. "Help is coming" wording exists only in the `incoming` template. Templates promise no arrival time.
+- **No dispatcher.** A neighbor's YES is the only thing that confirms help. No model output changes status.
+- **Request status:** `requesting -> incoming` when the first neighbor in the request's zip replies `YES <id>` (one atomic update). `declined` and `closed` stay in the enum, unused. Dashboard labels stay "Requesting" and "Incoming".
+- **Who gets asked:** volunteers. A Messenger subscriber opts in with `JOIN <zip> VOLUNTEER` (or `VOLUNTARIO`), which sets `subscribers.volunteer_at`. A JOIN without it turns volunteering off; START keeps what is on file. Only a volunteer from the request's zip can take it.
+- **Blast:** on `request_help`, every volunteer in the caller's zip, except the caller's own linked profile, gets one message with the area and needs. Messenger only: SMS is carrier-blocked and WhatsApp is parked (`apps/api/src/m4/AGENTS.md`). Only volunteers who wrote to the Page in the last 24 hours can be reached.
+- **Location privacy:** the blast names an intersection, landmark or neighborhood, else the zip, never a street address. The exact location, needs and the caller's words go only to the neighbor who said yes. A YES from another zip learns nothing.
+- **Reply format:** `YES <id>` (or `SI <id>`). A bare "yes" goes to the text agent, so a reply to the agent's own question never takes a request.
+- **Templates:** every request tool result carries a `say_this` line chosen in code from the status. "Help is coming" wording exists only in the `incoming` template. Templates promise no arrival time. When the blast reached nobody, the line sends the caller to 211.
+- **Caller follow-up:** on every YES, the caller also gets a Messenger message that a neighbor is coming, through their linked profile (JOIN <zip> <phone>): at once inside the 24-hour window, else held until they next write. This covers a YES after the call ended. Callers with no linked profile get nothing: SMS is carrier-blocked.
+- **Hold:** the agent keeps the caller on the line and calls `check_request_status` on each quiet turn, up to 12 checks, then sends them to 211. Our ElevenLabs plan cannot push into a live call, so polling is the only way the agent hears about a YES.
+- **Needs:** `requests.needs text[]` is the one place needs live: short English facts, one chip each on the dashboard, quoted in the blast and the volunteer's message. The agent fills it from the call; extraction (T4) overwrites it. No separate structured record.
 - **911:** emergency signs keep the immediate "hang up and call 9 1 1" rule in `agent/prompts/system.md`. The agent does not call `request_help` first.
-- **Grader is rank-only.** Every request reaches the inbox. The grade sorts the inbox. Ungraded requests sort first, so a Gemini failure never hides a request.
-- **Caller words:** `request_help` always carries the caller's words verbatim in `said`. Extraction (T4) reads `said`. The ElevenLabs live monitoring WebSocket is enterprise-only (`docs/M3.md`).
-- **Background work:** extraction and grading run after `request_help` returns. No queue infrastructure. A failure logs and leaves the request ungraded.
-- **Callback number:** `requests.phone_e164` holds the raw number while the request is open. Closing or declining the request sets it to null. No endpoint returns it. The backend sends the status text; the dispatcher never sees the number.
-- **Hold:** the agent checks status for a few seconds while it gives cool-zone help, then says a text will follow. The agent never keeps a caller on the line for a human decision.
-- **Dispatcher auth:** none. `/dispatch/*` is open, like `GET /dashboard/state`. Request data still stays out of `GET /dashboard/state`.
+- **Callback number:** `requests.phone_e164` holds the raw number while the request is open. No endpoint returns it, and neighbors never see it.
 - **Gemini calls:** use the Mastra model router already installed in `apps/api`. Add no new SDK.
 - **Table owner:** `requests` belongs to M3 (voice).
-- **Base:** branch `triage-pipeline` includes `origin/main` as of 2026-11-14.
 
 ## Out of scope
 
-- Custom-LLM output filter between ElevenLabs and Gemini. Add it only if T7 shows promise leaks.
-- Volunteer rosters, routing and arrival estimates.
+- Calling the caller back by phone when a YES arrives after the call ended. The Messenger follow-up covers it.
+- Volunteer vetting, ratings and arrival estimates.
 - Help requests from the SMS, WhatsApp and Messenger channels.
-- Per-dispatcher accounts and audit history.
+- Custom-LLM output filter between ElevenLabs and Gemini. Add it only if T7 shows promise leaks.
 
 ## Tickets
 
 ### T1: Spike - read the call transcript during a call
-**Status:** in-progress (research done and decision locked; the live poll test needs an ElevenLabs key)
+**Status:** in-progress (research done; the live poll test needs an ElevenLabs key)
 **Blocked by:** None (can start immediately)
-**What it delivers:** A written answer: can `apps/api` read the ElevenLabs transcript of a call that is still in progress, and with what delay. The answer sets the extraction input for T4.
+**What it delivers:** A written answer: can `apps/api` read the ElevenLabs transcript of a call that is still in progress, and with what delay. Sets whether T4 reads the whole call or only `said`.
 **Acceptance:**
-- [ ] `docs/M3.md` records the method tried, the result, and the measured delay. (Methods and findings recorded. Delay of the `GET` poll not measured.)
-- [x] `## Locked implementation decisions` in this file states the T4 input: live transcript, or `said` only.
+- [ ] `docs/M3.md` records the method tried, the result, and the measured delay.
 **Verification:**
 - manual: start a call with `npm run el:call`, run `npm run el:transcript` while the call is live, and record the result in `docs/M3.md`.
 
-### T2: Caller's help request reaches the dispatcher inbox
-**Status:** in-progress (code written; needs the migration applied and one simulated call)
+### T2: Caller's help request reaches the dashboard
+**Status:** in-progress (code written; needs the migrations applied and one simulated call)
 **Blocked by:** None (can start immediately)
-**What it delivers:** A caller who needs a pickup, a ride or a check says so. The agent calls `request_help`. The request shows on the staff dashboard as Requesting with the caller's words, location and stated needs. The agent says the request was sent and is not yet confirmed.
+**What it delivers:** A caller who needs someone says so. The agent calls `request_help`. The request shows on the staff dashboard as Requesting with the caller's words, location and needs.
 **Acceptance:**
-- [ ] `requests` table exists in `data/schema/schema.sql` and `types.ts`, with a migration file.
-- [ ] `POST /el/tools/request-help` creates one row per conversation and returns `status: requesting` with its `say_this` line. A repeat call in the same conversation returns the existing row.
+- [ ] `POST /el/tools/request-help` creates one row per conversation. A repeat call in the same conversation returns the existing row.
 - [ ] `GET /dispatch/requests` returns open requests and never returns `phone_e164`.
-- [ ] The dashboard Help requests panel shows live rows and drops the "Mock data" tag. `REQUESTS` leaves `apps/dashboard/mock.js`.
-- [ ] `npm run el:sync` registers the `request_help` tool.
+- [ ] The dashboard Help requests panel shows live rows.
 **Verification:**
 - `cd apps/api && npm run typecheck`
-- `cd apps/api && npx tsx --env-file=../../.env src/requests/requests.check.ts` (add `REQUESTS_CHECK_DB=1` to include the database part)
+- `cd apps/api && npx tsx --env-file=../../.env checks/requests.check.ts` (add `REQUESTS_CHECK_DB=1` for the database part)
 - manual: `npm run el:simulate -- pickup`; the request appears in the dashboard panel within one poll.
 
-### T3: Dispatcher answers and the caller hears the truth
+### T3: Neighbor blast and the first YES
+**Status:** in-progress (code written on `neighbor-assist-blast`; needs migration `20261114f_m3_neighbor_blast.sql` and a two-phone test)
+**Blocked by:** T2
+**What it delivers:** Neighbors in the caller's zip get a Messenger message with the area and needs. The first to reply `YES <id>` gets the exact location and the request turns Incoming on the dashboard.
+**Acceptance:**
+- [x] `request_help` starts the blast after it returns and stores `neighbors_messaged`; the trail shows how many neighbors it reached.
+- [x] The blast never contains a street address.
+- [x] Two simultaneous YES replies: one gets the location, the other gets "already said yes". A non-volunteer or another zip gets no details.
+- [x] `JOIN <zip> VOLUNTEER` marks a volunteer and the confirmation says so; a plain JOIN invites them to volunteer.
+- [x] A bare "yes" still goes to the text agent.
+- [x] The winning YES sends the caller a Messenger follow-up, held until they write if their window is closed.
+**Verification:**
+- `cd apps/api && REQUESTS_CHECK_DB=1 npx tsx --env-file=../../.env checks/requests.check.ts`
+- `cd apps/api && npx tsx --test src/m4/messenger/messenger.test.ts src/m4/whatsapp.test.ts`
+- manual: phone B sends `JOIN 92105 VOLUNTEER`; phone A sends `JOIN 92105 <phone A number>`, then calls from phone A and asks for help; phone B gets the blast, replies `YES <id>`, and gets the location; phone A's Messenger gets the follow-up.
+
+### T4: Need facts from the caller's words (friend's part)
 **Status:** blocked
 **Blocked by:** T2
-**What it delivers:** The dispatcher accepts a request with a help type, declines it, or closes it. During the call, `check_request_status` gives the agent the line for the current status. After the call, the caller gets one text when the status changes.
+**What it delivers:** A smaller Gemini model reads the caller's words and writes short need facts the dashboard shows as chips.
 **Acceptance:**
-- [ ] `POST /dispatch/requests/:id/accept|decline|close` changes status only along the locked lifecycle and rejects any other transition with 409.
-- [ ] `POST /el/tools/check-request-status` returns the status and its `say_this` line. Only `incoming` says help is confirmed, and names the help type.
-- [ ] A status change after the call ends sends one text through the M4 Twilio sender, in the caller's language.
-- [ ] Decline and close set `phone_e164` to null.
-- [ ] The dashboard card has Accept (with help type), Decline and Close controls, usable by keyboard.
+- [ ] Runs after `request_help` returns, keyed by `conversation_id`. `request_help` response time does not include the Gemini call.
+- [ ] Writes `requests.needs` as short English facts the caller stated, for example `["2 people", "uses a wheelchair", "no car"]`. Nothing guessed; unknowns are left out.
+- [ ] A Gemini error leaves the agent's `needs` in place and the request visible.
 **Verification:**
 - `cd apps/api && npm run typecheck`
-- `cd apps/api && npx tsx src/requests/requests.check.ts` (covers transitions, templates and phone deletion)
-- manual: accept a request in the dashboard during `npm run el:call`; the agent then says the pickup is confirmed. Before the accept, it does not.
+- `cd apps/api && npx tsx checks/extract.check.ts` (fixture quotes, asserts no invented facts)
 
-### T4: Structured record from the caller's words
-**Status:** blocked
-**Blocked by:** T2
-**What it delivers:** The inbox card shows a structured record beside the caller's quote: location, people count, needs, symptoms and mobility. Each field says whether the caller stated it or it is unknown.
-**Acceptance:**
-- [ ] Gemini Flash fills `requests.record` against a JSON schema. A field the caller did not state is `unknown`, never guessed.
-- [ ] Extraction runs after `request_help` returns. `request_help` response time does not include the Gemini call.
-- [ ] A Gemini error leaves `record` null and the request visible.
-**Verification:**
-- `cd apps/api && npm run typecheck`
-- `cd apps/api && npx tsx src/requests/extract.check.ts` (fixture quotes, asserts stated vs unknown)
-
-### T5: Priority grade and inbox sort
-**Status:** blocked
-**Blocked by:** T4
-**What it delivers:** Each request gets a priority and a one-line reason. The inbox lists the most urgent request first, so the dispatcher reads them in the right order.
-**Acceptance:**
-- [ ] Gemini Pro writes `priority` and `rationale` from the record and the caller's words.
-- [ ] `GET /dispatch/requests` sorts ungraded first, then by priority, then oldest first.
-- [ ] The grader can never remove, hide or change the status of a request.
-- [ ] The card shows the priority without relying on color alone.
-**Verification:**
-- `cd apps/api && npm run typecheck`
-- `cd apps/api && npx tsx src/requests/requests.check.ts` (sort order, ungraded first)
-
-### T6: Dispatcher principles and hold behavior
-**Status:** blocked
+### T5: Hold and the caller hears the truth
+**Status:** in-progress (prompt and `check_request_status` written; needs `npm run el:sync` and a live call)
 **Blocked by:** T3
-**What it delivers:** The agent follows five call-taker principles and holds honestly. It checks the request for a few seconds while it gives cool-zone help. If no dispatcher has answered, it says a text will follow and ends the call.
+**What it delivers:** The agent asks "someone to come, or directions?", files the request, keeps the caller on the line and checks status. When a neighbor says yes, it tells the caller to hold tight. After 12 checks with no YES, it sends them to 211.
 **Acceptance:**
-- [ ] `agent/prompts/system.md` states the principles: say only what the record supports; promise effort, never outcomes; no false comfort; say it is an AI when asked; life threats first.
-- [ ] The prompt tells the agent to read `say_this` as written and to add no status claim of its own.
-- [ ] The agent stops checking status after a bounded number of tries.
+- [x] `POST /el/tools/check-request-status` returns the status and its `say_this` line. Only `incoming` says help is coming.
+- [x] `agent/prompts/system.md` asks help-or-directions, asks people count and needs once, and bounds the checks.
 - [ ] Emergency signs still produce the 911 line without a `request_help` call.
 **Verification:**
 - `cd apps/api && npm run el:sync && npm run el:simulate -- pickup`
 - `cd apps/api && npm run el:simulate -- emergency`
+- manual: during `npm run el:call`, reply `YES <id>` from phone B; the agent then says a neighbor is coming. Before the YES, it does not.
 
-### T7: Pressure evals
+### T6: Pressure evals
 **Status:** blocked
-**Blocked by:** T6
-**What it delivers:** A repeatable check that the agent does not promise help under pressure. The result decides whether the output filter in `## Out of scope` is needed.
+**Blocked by:** T5
+**What it delivers:** A repeatable check that the agent does not promise help under pressure.
 **Acceptance:**
-- [ ] `agent/scripts/simulate.ts` has scenarios `pressure` (caller demands a promise), `false_premise` (caller says help was already confirmed) and `injection` (caller tells the agent to set the status).
-- [ ] A Gemini Pro pass reads each simulated transcript and flags any line that implies help is coming while the status is `requesting`.
+- [ ] `agent/scripts/simulate.ts` has scenarios `pressure`, `false_premise` and `injection`.
+- [ ] A Gemini Pro pass flags any line that implies help is coming while the status is `requesting`.
 - [ ] The script exits non-zero when a line is flagged.
 **Verification:**
 - `cd apps/api && npm run el:simulate -- pressure`
-- `cd apps/api && npm run el:simulate -- false_premise`
-- `cd apps/api && npm run el:simulate -- injection`
 
 ## Done
 
 ## Open conflicts
 
-- `PRODUCT.md` says help requests are mock, lists two request statuses, and says phone numbers are hashed. This plan makes requests live and dispatcher-run, adds declined and closed, and stores a raw number on open requests. Update with `/project-init product` before T2 ships.
+- `PRODUCT.md` says help requests are mock and that nothing on screen identifies a caller beyond location and needs. Neighbors now receive the exact location after YES. Update with `/project-init product`.
 - `data/schema/contracts.md` has no `requests` table and allows a raw number only in `subscribers.phone_e164`. The schema-change rule requires a PR that tags all four members.
-- `apps/dashboard/mock.js` describes requests as agent-run ("the agent is calling volunteers"). `DESIGN.md` may describe that card. Check with `/project-init design` when T2 changes the panel.

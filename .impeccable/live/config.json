@@ -1,5 +1,5 @@
 {
-  "files": ["apps/dashboard/*.html"],
+  "files": ["apps/web/*.html"],
   "insertBefore": "</body>",
   "commentSyntax": "html",
   "cspChecked": true

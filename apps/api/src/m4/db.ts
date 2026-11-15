@@ -180,6 +180,8 @@ export interface UpsertMessengerSubscriberInput {
   consentAt: Date;
   linkedPhoneHash?: string | null; // hashPhone(e164) of the number given with JOIN; null/undefined keeps the old link
   displayName?: string | null; // the name given with JOIN; null/undefined keeps the old one
+  // JOIN ... VOLUNTEER sets subscribers.volunteer_at, a JOIN without it clears it, undefined (START) keeps it.
+  volunteer?: boolean;
 }
 
 // A Messenger opt-in, keyed on the Messenger hash: stores the ids alerts need and sets alert_channel 'messenger'.
@@ -195,14 +197,17 @@ export async function upsertMessengerSubscriber(input: UpsertMessengerSubscriber
   }
   const rows = await query<SubscriberRow>(
     `insert into subscribers (phone_hash, phone_e164, zip, language, needs, consent_at, opted_out_at, alert_channel,
-                              messenger_psid, messenger_page_id, linked_phone_hash, display_name)
-     values ($1, null, $2, $3, $4::jsonb, $5::timestamptz, null, 'messenger', $6, $7, $8, $9)
+                              messenger_psid, messenger_page_id, linked_phone_hash, display_name, volunteer_at)
+     values ($1, null, $2, $3, $4::jsonb, $5::timestamptz, null, 'messenger', $6, $7, $8, $9,
+             case when $10::boolean then now() end)
      on conflict (phone_hash) do update set
        zip = excluded.zip, language = excluded.language, needs = excluded.needs, consent_at = excluded.consent_at,
        opted_out_at = null, alert_channel = 'messenger',
        messenger_psid = excluded.messenger_psid, messenger_page_id = excluded.messenger_page_id,
        linked_phone_hash = coalesce(excluded.linked_phone_hash, subscribers.linked_phone_hash),
-       display_name = coalesce(excluded.display_name, subscribers.display_name)
+       display_name = coalesce(excluded.display_name, subscribers.display_name),
+       volunteer_at = case when $10::boolean is null then subscribers.volunteer_at
+                           when $10::boolean then coalesce(subscribers.volunteer_at, now()) end
      returning ${SUBSCRIBER_COLUMNS}`,
     [
       input.phoneHash,
@@ -214,6 +219,7 @@ export async function upsertMessengerSubscriber(input: UpsertMessengerSubscriber
       input.pageId,
       input.linkedPhoneHash ?? null,
       input.displayName ?? null,
+      input.volunteer ?? null,
     ],
   );
   return rows[0];
@@ -265,6 +271,19 @@ export async function listActiveSubscribersByZips(zips: string[]): Promise<(Subs
          and ${current ? '(phone_e164 is not null or (messenger_psid is not null and messenger_page_id is not null))' : 'phone_e164 is not null'}
        order by id`,
       [JSON.stringify(zips)],
+    ),
+  );
+}
+
+// Every opted-in volunteer (JOIN ... VOLUNTEER) reachable on Messenger, wherever they live: help requests go to all
+// of them (requests/neighbors.ts).
+export async function listActiveVolunteers(): Promise<MessengerContact[]> {
+  return withAlertChannel((columns) =>
+    query<MessengerContact>(
+      `select ${columns} from subscribers
+       where opted_out_at is null and volunteer_at is not null
+         and messenger_psid is not null and messenger_page_id is not null
+       order by id`,
     ),
   );
 }
